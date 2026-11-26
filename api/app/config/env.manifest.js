@@ -41,6 +41,10 @@ export const ENV_MANIFEST = Object.freeze({
     doc: 'Comma-separated origins allowed to call the API. "*" disables the allow-list.',
   },
 
+  WEB_ROOT: {
+    doc: 'Built dashboard (web/build) to serve at "/". Unset = API only.',
+  },
+
   DB_PATH: {
     fallback: 'data/events.db',
     doc: 'SQLite file holding every event. ":memory:" keeps nothing between runs.',

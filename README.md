@@ -19,27 +19,62 @@ any other caller; nothing is sent anywhere else.
 
 ---
 
-## Start
+## Run it while you work
 
 Requires Node 24+.
 
 ```bash
 npm run install:all
-npm run dev:api                 # collector on http://127.0.0.1:4317
-npm run dev:web                 # dashboard on http://localhost:5173
-npm run hooks:install
+npm start                       # panel on http://127.0.0.1:4317
+npm run hooks:install           # once: point Claude Code at it
 ```
+
+`npm start` builds the dashboard and starts the collector, which serves it on
+the same address: one process, one port. Open `http://127.0.0.1:4317` and start
+a Claude Code session anywhere on this machine; it shows up live.
+
+Running natively is the simplest setup: the collector sees your project folders
+and the Docker daemon exactly as Claude Code does.
 
 `hooks:install` adds the collector's HTTP hooks to `~/.claude/settings.json`
 (your existing settings and hooks are kept; the old file is saved as
-`settings.json.bak`). Every new Claude Code session on this machine then appears
-on the dashboard. To instrument one project only:
+`settings.json.bak`). Sessions already open pick the hooks up on their next
+start. To instrument one project only:
 
 ```bash
 npm --prefix api run hooks:install -- --settings /path/to/project/.claude/settings.local.json
 ```
 
-Remove them with `npm run hooks:uninstall` (same flags).
+Remove them with `npm run hooks:uninstall` (same flags). Another port? Start
+with `PORT=5000 npm start` and install with `-- --url http://127.0.0.1:5000/v1/hooks`.
+
+### Run in Docker
+
+```bash
+docker compose up -d --build    # panel on http://127.0.0.1:4317
+npm run hooks:install           # on the host, once (needs only Node)
+```
+
+The collector watches the machine it runs on, so the container is wired to the
+host on purpose:
+
+| What | Why | Setting |
+| --- | --- | --- |
+| `network_mode: host` | Hooks must arrive from `127.0.0.1`; through a published port they come from the bridge gateway and the loopback guard refuses them. | On Docker Desktop (macOS/Windows), enable *Settings → Resources → Network → Enable host networking*. |
+| Your projects folder, read-only, at the **same path** | Hooks report each session's folder as a host path; the file watcher and `npm audit` open that path. | `PROJECTS_DIR` (default: your home folder). |
+| `/var/run/docker.sock` | The Containers card follows `docker events`. Access to the socket is root-equivalent on the host. | Remove the line and set `WATCH_DOCKER=false` to run without it. |
+| `panel-data` volume | Keeps the event history across restarts. | — |
+
+For example, `PROJECTS_DIR=$HOME/code docker compose up -d` mounts only that
+folder. Sessions outside it still show agents, tools and tests; only file
+changes made outside tool calls and the security audit need the mount.
+
+### Develop
+
+```bash
+npm run dev:api                 # collector on http://127.0.0.1:4317
+npm run dev:web                 # dashboard with hot reload on http://localhost:5173
+```
 
 No session at hand? `npm run demo` plays a short made-up session
 against the running collector.
@@ -68,7 +103,8 @@ Claude Code keeps working with the dashboard closed.
 Every variable has a default; see [`api/.env.example`](api/.env.example).
 `WATCH_DOCKER=false`, `WATCH_FILES=false` and `WATCH_SECURITY=false` turn the
 watchers off (the audit calls the npm registry, so turn it off when offline);
-`DB_PATH` moves the SQLite file (default `api/data/events.db`).
+`DB_PATH` moves the SQLite file (default `api/data/events.db`); `WEB_ROOT` is
+the dashboard build the collector serves (`npm start` sets it).
 
 ---
 

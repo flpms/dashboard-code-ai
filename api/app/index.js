@@ -51,6 +51,7 @@ const start = async () => {
   await app.listen({ port: env.app.port, host: env.app.host });
 
   Logger.info(`Collector listening on http://${env.app.host}:${env.app.port}/v1`);
+  if (env.app.webRoot) Logger.info(`Dashboard on http://${env.app.host}:${env.app.port}/`);
 
   return app;
 };
