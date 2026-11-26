@@ -1,8 +1,7 @@
-export { signInSchema } from './auth.schema.js';
-export { ITEM_STATUS, itemSchema, itemUpdateSchema } from './items.schema.js';
+export { eventSchema } from './event.schema.js';
 
 /**
- * Runs a schema and returns a shape a form can render directly.
+ * Runs a schema and returns either the parsed value or a field → message map.
  *
  * @template T
  * @param {import('zod').ZodType<T>} schema

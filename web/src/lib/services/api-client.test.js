@@ -63,3 +63,55 @@ describe('ApiClient', () => {
     await expect(failing.get('/v1/items')).rejects.toThrow('<html>gateway</html>');
   });
 });
+
+describe('ApiClient.subscribe', () => {
+  const fakeEventSource = () => {
+    const opened = [];
+    function FakeEventSource(url) {
+      this.url = url;
+      this.closed = false;
+      this.close = () => {
+        this.closed = true;
+      };
+      opened.push(this);
+    }
+    return { FakeEventSource, opened };
+  };
+
+  it('parses each message and reports the connection state', () => {
+    const { FakeEventSource, opened } = fakeEventSource();
+    const onmessage = vi.fn();
+    const onstatus = vi.fn();
+
+    ApiClient({ fetchImpl: vi.fn(), EventSourceImpl: FakeEventSource }).subscribe('/v1/stream', {
+      onmessage,
+      onstatus,
+    });
+
+    const [source] = opened;
+    source.onopen();
+    source.onmessage({ data: '{"seq":1}' });
+    source.onerror();
+
+    expect(source.url).toMatch(/\/v1\/stream$/);
+    expect(onmessage).toHaveBeenCalledWith({ seq: 1 });
+    expect(onstatus.mock.calls).toEqual([['open'], ['error']]);
+  });
+
+  it('drops a malformed message without breaking the stream', () => {
+    const { FakeEventSource, opened } = fakeEventSource();
+    const onmessage = vi.fn();
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const close = ApiClient({ fetchImpl: vi.fn(), EventSourceImpl: FakeEventSource }).subscribe(
+      '/v1/stream',
+      { onmessage }
+    );
+    opened[0].onmessage({ data: 'not json' });
+    close();
+
+    expect(onmessage).not.toHaveBeenCalled();
+    expect(opened[0].closed).toBe(true);
+    spy.mockRestore();
+  });
+});

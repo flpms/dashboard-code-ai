@@ -1,14 +1,13 @@
 {
-  "name": "node-svelte-clean-template",
+  "name": "dashboard-code-ai",
   "version": "1.0.0",
   "private": true,
-  "description": "Template: layered Fastify API + SvelteKit SPA, with deploy pipelines and architecture skills",
+  "description": "Instruments for AI coding sessions: a local collector for Claude Code hooks and a live dashboard",
   "type": "module",
   "engines": {
     "node": ">=24"
   },
   "scripts": {
-    "bootstrap": "node scripts/bootstrap.mjs",
     "install:all": "npm --prefix api ci && npm --prefix web ci",
     "dev:api": "npm --prefix api run dev",
     "dev:web": "npm --prefix web run dev",
@@ -16,8 +15,9 @@
     "lint": "npm --prefix api run lint && npm --prefix web run lint",
     "check": "npm --prefix web run check",
     "verify": "npm run lint && npm run check && npm test",
-    "db:up": "docker compose -f api/docker-compose.yml up -d mongodb",
-    "db:down": "docker compose -f api/docker-compose.yml down"
+    "hooks:install": "npm --prefix api run hooks:install",
+    "hooks:uninstall": "npm --prefix api run hooks:uninstall",
+    "demo": "npm --prefix api run demo"
   },
   "license": "MIT"
 }
