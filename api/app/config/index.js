@@ -13,19 +13,19 @@ export const EnvConfig = config;
  * `import` of a live connection from a random file.
  *
  * The order matters: environment first, logger second, database last. A missing
- * variable is reported by name before anything opens a socket.
+ * variable is reported by name before anything opens a file.
  */
-export const StartupConfig = async ({
-  Joi,
-  jwt,
-  lib,
-  MongoClient,
-  ObjectId,
-  randomUUID,
-  storage,
-  getSignedUrl,
-  winston,
+export const StartupConfig = ({
+  DatabaseSync,
+  dirname,
   enums,
+  Joi,
+  lib,
+  mkdirSync,
+  randomUUID,
+  spawn,
+  watch,
+  winston,
 }) => {
   const env = config;
 
@@ -41,20 +41,20 @@ export const StartupConfig = async ({
     throw new ReferenceError(message);
   }
 
-  const { db, dbClient } = await DBStartup({ env, logger: Logger, MongoClient });
+  const { db } = DBStartup({ env, logger: Logger, DatabaseSync, mkdirSync, dirname });
 
-  const services = Services({ env, Logger, storage, getSignedUrl });
+  const services = Services({ env, Logger, spawn, watch });
 
   return {
+    // Injected so a test can pin time; every event timestamp comes from here.
+    clock: () => new Date().toISOString(),
     db,
-    dbClient,
     enums,
     env,
+    eventBus: lib.EventBus(),
     generateSchemaObject: lib.GenerateSchemaObject,
     Joi,
-    jwt,
     Logger,
-    ObjectId,
     randomUUID,
     responseHandler: lib.ResponseHandler(Logger),
     routeProcessor: lib.RouteProcessor,

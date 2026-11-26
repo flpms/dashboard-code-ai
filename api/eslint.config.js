@@ -36,6 +36,6 @@ export default [
     rules: { 'no-console': 'off' },
   },
   {
-    ignores: ['node_modules/', 'coverage/', 'logs/', 'mongo-volume/'],
+    ignores: ['node_modules/', 'coverage/', 'logs/', 'data/'],
   },
 ];

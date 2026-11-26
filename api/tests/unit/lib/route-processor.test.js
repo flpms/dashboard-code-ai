@@ -14,28 +14,24 @@ const deps = app => ({
   Logger: fakeLogger(),
   controllers: { listItems: 'CONTROLLER' },
   schemas: { get: { listItems: { params: 'PARAMS' } } },
-  permissions: roles => `PERMISSIONS:${roles.join('|')}`,
-  requireAuthToken: 'AUTH',
-  requireTenantScope: 'TENANT',
+  requireLoopback: 'LOOPBACK',
 });
 
 const listItems = flags => ({ listItems: { path: '/items', method: 'get', ...flags } });
 
 describe('RouteProcessor', () => {
-  it('runs the guards in a fixed order: auth, roles, tenant', () => {
+  it('turns the local flag into the loopback guard', () => {
     const app = fakeApp();
 
-    RouteProcessor(deps(app))(
-      listItems({ auth: true, roles: ['admin'], tenant: true, validate: true })
-    );
+    RouteProcessor(deps(app))(listItems({ local: true, validate: true }));
 
-    assert.deepEqual(app.registered[0].onRequest, ['AUTH', 'PERMISSIONS:admin', 'TENANT']);
+    assert.deepEqual(app.registered[0].onRequest, ['LOOPBACK']);
   });
 
   it('hands Fastify the method, the path, the schema and the controller', () => {
     const app = fakeApp();
 
-    RouteProcessor(deps(app))(listItems({ auth: true, validate: true }));
+    RouteProcessor(deps(app))(listItems({ local: true, validate: true }));
 
     const [route] = app.registered;
     assert.equal(route.method, 'GET');
@@ -48,7 +44,7 @@ describe('RouteProcessor', () => {
     const app = fakeApp();
     const dependencies = { ...deps(app), schemas: { get: {} } };
 
-    RouteProcessor(dependencies)(listItems({ auth: false, roles: false, tenant: false }));
+    RouteProcessor(dependencies)(listItems({ local: false }));
 
     assert.equal(app.registered[0].onRequest, undefined);
     assert.equal(app.registered[0].schema, undefined);

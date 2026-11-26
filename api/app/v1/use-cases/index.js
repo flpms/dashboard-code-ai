@@ -1,9 +1,7 @@
 'use strict';
 
-import { Auth } from './auth.js';
-import { Items } from './items.js';
+import { Collector } from './collector.js';
 
 export const UseCases = dependencies => ({
-  ...Auth(dependencies),
-  ...Items(dependencies),
+  ...Collector(dependencies),
 });

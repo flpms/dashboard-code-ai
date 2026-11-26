@@ -20,31 +20,18 @@ export const config = Object.freeze({
     version: packageJson.version,
     env: raw.NODE_ENV,
     port: raw.PORT,
-    url: raw.APP_URL,
+    host: raw.HOST,
     logLevel: raw.LOG_LEVEL,
     logPath: raw.LOG_PATH,
     corsAllowedOrigins: raw.CORS_ALLOWED_ORIGINS,
-    jwtSecret: raw.JWT_SECRET,
-    jwtExpiresIn: raw.JWT_EXPIRES_IN,
     commitSha: process.env.COMMIT_SHA || 'unknown',
   },
   db: {
-    databaseURL: raw.MONGO_CONNECTION,
-    collections: {
-      users: raw.USERS_COLLECTION,
-      items: raw.ITEMS_COLLECTION,
-      history: raw.HISTORY_COLLECTION,
-    },
+    path: raw.DB_PATH,
   },
-  storage: {
-    endpoint: raw.STORAGE_ENDPOINT,
-    region: raw.STORAGE_REGION,
-    accessKeyId: raw.STORAGE_ACCESS_KEY_ID,
-    secretAccessKey: raw.STORAGE_SECRET_ACCESS_KEY,
-    signedUrlTtl: raw.STORAGE_SIGNED_URL_TTL,
-    buckets: {
-      files: raw.STORAGE_FILES_BUCKET,
-    },
+  watchers: {
+    docker: raw.WATCH_DOCKER,
+    files: raw.WATCH_FILES,
   },
 });
 
