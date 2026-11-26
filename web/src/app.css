@@ -1,0 +1,11 @@
+@import 'tailwindcss';
+
+/* Tailwind 4 keeps design tokens in CSS, not in a JS config. A token added here
+   is available as a utility (`bg-brand`, `text-brand`) with no build step of
+   its own. */
+@theme {
+  --color-brand-50: oklch(0.97 0.02 250);
+  --color-brand-500: oklch(0.62 0.17 250);
+  --color-brand-600: oklch(0.55 0.17 250);
+  --color-brand-700: oklch(0.48 0.16 250);
+}

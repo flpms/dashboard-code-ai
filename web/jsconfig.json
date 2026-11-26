@@ -1,0 +1,21 @@
+{
+  "extends": "./.svelte-kit/tsconfig.json",
+  "compilerOptions": {
+    "allowJs": true,
+    // Type checking without TypeScript: JSDoc annotations are checked as if
+    // they were type declarations. This is the gate that keeps `npm run check`
+    // meaningful — a template that ships with errors here teaches everyone to
+    // ignore it.
+    "checkJs": true,
+    "strict": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "sourceMap": true,
+    "moduleResolution": "bundler"
+  },
+  // Tests are exercised by Vitest and Playwright, which type-check nothing and
+  // need loose fakes to stay readable. Checking them buys casts, not safety.
+  "exclude": ["**/*.test.js", "**/*.spec.js", "e2e/**", "build/**", "node_modules/**"]
+}

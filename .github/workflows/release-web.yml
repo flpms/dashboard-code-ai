@@ -1,0 +1,102 @@
+name: Release Web
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'web/**'
+      - '.github/workflows/release-web.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: release-web
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    uses: ./.github/workflows/ci.yml
+    secrets: inherit
+
+  # A fresh clone of this template has no server yet. Rather than fail the first
+  # push with an SSH error, check whether the deploy target is configured and
+  # skip cleanly if it is not. Secrets are unavailable in a job-level `if`, so
+  # the check has to happen inside a step.
+  guard:
+    name: Deploy target configured?
+    runs-on: ubuntu-latest
+    outputs:
+      configured: ${{ steps.check.outputs.configured }}
+    steps:
+      - id: check
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+        run: |
+          if [ -n "$SSH_HOST" ]; then
+            echo 'configured=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'configured=false' >> "$GITHUB_OUTPUT"
+            echo '::notice::SSH_HOST is not set — skipping deploy. See docs/ENVIRONMENT.md.'
+          fi
+
+  deploy:
+    name: Build and publish
+    needs: [test, guard]
+    if: needs.guard.outputs.configured == 'true'
+    runs-on: ubuntu-latest
+    environment: production
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24.x'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - run: npm ci
+
+      # PUBLIC_* values are baked into the bundle at build time. Changing one
+      # needs a rebuild — restarting nothing will help. Nothing secret goes here.
+      - name: Write build env
+        run: |
+          {
+            echo "COMMIT_SHA=${{ github.sha }}"
+            echo "PUBLIC_API_URL=${{ vars.PUBLIC_API_URL }}"
+            echo "PUBLIC_APP_NAME=${{ vars.PUBLIC_APP_NAME }}"
+          } > .env
+
+      - run: npm run build
+
+      - name: Configure SSH
+        env:
+          SSH_KEY: ${{ secrets.SSH_KEY }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USERNAME }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s' "$SSH_KEY" | tr -d '\r' > ~/.ssh/id_deploy
+          chmod 400 ~/.ssh/id_deploy
+          ssh-keyscan -H "$SSH_HOST" >> ~/.ssh/known_hosts
+          cat >> ~/.ssh/config <<CONF
+          Host target
+            HostName $SSH_HOST
+            User $SSH_USER
+            IdentityFile ~/.ssh/id_deploy
+          CONF
+
+      # Upload beside the live directory, then swap. `rm -rf` on the served
+      # path first would leave the site 404ing for the length of the transfer.
+      - name: Publish
+        env:
+          ROOT: /srv/${{ github.event.repository.name }}/web
+        run: |
+          ssh target "mkdir -p $ROOT/releases"
+          rsync -az --delete build/ target:$ROOT/releases/${{ github.sha }}/
+          ssh target "ln -sfn $ROOT/releases/${{ github.sha }} $ROOT/current.tmp && mv -T $ROOT/current.tmp $ROOT/current"
+          ssh target "cd $ROOT/releases && ls -1t | tail -n +6 | xargs -r rm -rf"

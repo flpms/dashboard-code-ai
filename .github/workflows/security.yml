@@ -1,0 +1,52 @@
+name: Security
+
+on:
+  pull_request:
+  schedule:
+    # Monday 06:00 UTC. A weekly run catches advisories published against code
+    # that has not changed — which is most of them.
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: npm audit
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        workspace: [api, web]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24.x'
+      # Production dependencies only, high and above. Dev-dependency advisories
+      # are worth knowing about but should not block a release.
+      - name: Audit ${{ matrix.workspace }}
+        working-directory: ${{ matrix.workspace }}
+        run: npm audit --omit=dev --audit-level=high
+
+  # Dependency review reads the dependency graph, which a private repository
+  # only gets with GitHub Advanced Security. Without it the action fails every
+  # pull request with "Dependency review is not supported on this repository" —
+  # a red check no change can turn green. So the job runs where it works, and
+  # skips where it cannot, like the release workflows skip without a deploy
+  # target. `npm audit` above still runs on every pull request either way.
+  #
+  # To force it on — a public repository, or a private one with Advanced
+  # Security — set the repository variable DEPENDENCY_REVIEW to `true`.
+  dependency-review:
+    name: Dependency review
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'pull_request' &&
+      (github.event.repository.private == false || vars.DEPENDENCY_REVIEW == 'true')
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/dependency-review-action@v5
+        with:
+          fail-on-severity: high

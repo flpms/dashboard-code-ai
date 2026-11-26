@@ -1,0 +1,172 @@
+name: Release API
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'api/**'
+      - '.github/workflows/release-api.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: release-api
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}-api
+  REMOTE_DIR: /srv/${{ github.event.repository.name }}/api
+
+jobs:
+  test:
+    uses: ./.github/workflows/ci.yml
+    secrets: inherit
+
+  # A fresh clone of this template has no server yet. Rather than fail the first
+  # push with an SSH error, check whether the deploy target is configured and
+  # skip cleanly if it is not. Secrets are unavailable in a job-level `if`, so
+  # the check has to happen inside a step.
+  guard:
+    name: Deploy target configured?
+    runs-on: ubuntu-latest
+    outputs:
+      configured: ${{ steps.check.outputs.configured }}
+    steps:
+      - id: check
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+        run: |
+          if [ -n "$SSH_HOST" ]; then
+            echo 'configured=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'configured=false' >> "$GITHUB_OUTPUT"
+            echo '::notice::SSH_HOST is not set — skipping deploy. See docs/ENVIRONMENT.md.'
+          fi
+
+  build:
+    name: Build and push image
+    needs: [test, guard]
+    if: needs.guard.outputs.configured == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Tagged by commit as well as `latest`, so a rollback is a pull rather
+      # than a rebuild.
+      - uses: docker/build-push-action@v7
+        with:
+          context: ./api
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ github.sha }}
+            ${{ env.IMAGE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: Deploy
+    needs: [build, guard]
+    if: needs.guard.outputs.configured == 'true'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24.x'
+
+      # One script, driven by app/config/env.manifest.js. No per-variable echo
+      # line to forget when the code grows a new name.
+      - name: Render .env
+        working-directory: api
+        env:
+          COMMIT_SHA: ${{ github.sha }}
+          NODE_ENV: production
+          PORT: ${{ vars.PORT }}
+          LOG_LEVEL: ${{ vars.LOG_LEVEL }}
+          LOG_PATH: ${{ vars.LOG_PATH }}
+          APP_URL: ${{ vars.APP_URL }}
+          CORS_ALLOWED_ORIGINS: ${{ vars.CORS_ALLOWED_ORIGINS }}
+          JWT_EXPIRES_IN: ${{ vars.JWT_EXPIRES_IN }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          MONGO_CONNECTION: ${{ secrets.MONGO_CONNECTION }}
+          MONGO_INITDB_ROOT_USERNAME: ${{ secrets.MONGO_INITDB_ROOT_USERNAME }}
+          MONGO_INITDB_ROOT_PASSWORD: ${{ secrets.MONGO_INITDB_ROOT_PASSWORD }}
+          MONGO_INITDB_DATABASE: ${{ secrets.MONGO_INITDB_DATABASE }}
+          USERS_COLLECTION: ${{ vars.USERS_COLLECTION }}
+          ITEMS_COLLECTION: ${{ vars.ITEMS_COLLECTION }}
+          HISTORY_COLLECTION: ${{ vars.HISTORY_COLLECTION }}
+          STORAGE_ENDPOINT: ${{ vars.STORAGE_ENDPOINT }}
+          STORAGE_REGION: ${{ vars.STORAGE_REGION }}
+          STORAGE_ACCESS_KEY_ID: ${{ secrets.STORAGE_ACCESS_KEY_ID }}
+          STORAGE_SECRET_ACCESS_KEY: ${{ secrets.STORAGE_SECRET_ACCESS_KEY }}
+          STORAGE_FILES_BUCKET: ${{ vars.STORAGE_FILES_BUCKET }}
+          STORAGE_SIGNED_URL_TTL: ${{ vars.STORAGE_SIGNED_URL_TTL }}
+        run: node scripts/render-env.js "$RUNNER_TEMP/.env"
+
+      # Fails here, naming the variable, instead of booting an API that only
+      # discovers the gap on the first request that needs it.
+      - name: Check environment
+        working-directory: api
+        run: node scripts/check-env.js "$RUNNER_TEMP/.env"
+
+      - name: Configure SSH
+        env:
+          SSH_KEY: ${{ secrets.SSH_KEY }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USERNAME }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s' "$SSH_KEY" | tr -d '\r' > ~/.ssh/id_deploy
+          chmod 400 ~/.ssh/id_deploy
+          ssh-keyscan -H "$SSH_HOST" >> ~/.ssh/known_hosts
+          cat >> ~/.ssh/config <<CONF
+          Host target
+            HostName $SSH_HOST
+            User $SSH_USER
+            IdentityFile ~/.ssh/id_deploy
+          CONF
+
+      - name: Ship env and compose file
+        run: |
+          ssh target "mkdir -p ${{ env.REMOTE_DIR }}"
+          scp "$RUNNER_TEMP/.env" target:${{ env.REMOTE_DIR }}/.env
+          scp api/docker-compose.yml target:${{ env.REMOTE_DIR }}/docker-compose.yml
+
+      # Pull, never build. The image CI tested is the image that runs.
+      - name: Pull and restart
+        run: |
+          ssh target "cd ${{ env.REMOTE_DIR }} && \
+            echo '${{ secrets.GITHUB_TOKEN }}' | docker login ghcr.io -u ${{ github.actor }} --password-stdin && \
+            sed -i '/^API_IMAGE=/d' .env && \
+            echo 'API_IMAGE=${{ env.IMAGE }}:${{ github.sha }}' >> .env && \
+            docker compose pull api && \
+            docker compose up -d --remove-orphans && \
+            docker image prune -f"
+
+      - name: Wait for health
+        run: |
+          for attempt in $(seq 1 30); do
+            if ssh target "curl --silent --fail http://localhost:${{ vars.PORT }}/v1 > /dev/null"; then
+              echo "Healthy after ${attempt} attempt(s)."
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Service did not become healthy. Recent logs:"
+          ssh target "cd ${{ env.REMOTE_DIR }} && docker compose logs --tail=100 api"
+          exit 1
