@@ -7,6 +7,7 @@
   import { ApiClient } from '$services/api-client.js';
   import { SessionsService } from '$services/sessions.service.js';
   import { buildSessionModel } from '$lib/utils/session-model.js';
+  import { baseName } from '$lib/utils/format.js';
 
   /**
    * The dashboard. The page is the only layer that knows about all the others:
@@ -196,6 +197,10 @@
   {/if}
 
   {#if selected}
+    <!-- The panorama header shows the name big; this keeps it the page's
+         heading for screen readers and for anyone navigating by headings. -->
+    <h1 class="sr-only">{baseName(selected.cwd)}</h1>
+
     <InstrumentsBar {model} cwd={selected.cwd} />
 
     <div class="grid grid-cols-1 gap-2 xl:grid-cols-[minmax(0,7fr)_minmax(0,3fr)]">
