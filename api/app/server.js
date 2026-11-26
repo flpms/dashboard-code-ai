@@ -4,6 +4,7 @@ import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import Fastify from 'fastify';
 
+import { Dashboard } from './dashboard.js';
 import { ErrorHandler } from './error-handler.js';
 import lib from './lib/index.js';
 import { RoutesV1 } from './v1/index.js';
@@ -37,6 +38,10 @@ export const Server = async dependencies => {
   ErrorHandler({ app, enums, env, Logger, validationDetails: lib.validationDetails });
 
   await app.register(RoutesV1(dependencies), { prefix: '/v1' });
+
+  // Optional: without WEB_ROOT the collector is API-only and the dashboard
+  // runs from its own dev server.
+  if (env.app.webRoot) await app.register(Dashboard(dependencies));
 
   return app;
 };

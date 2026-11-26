@@ -2,6 +2,8 @@
 
 import 'dotenv/config';
 
+import { resolve } from 'node:path';
+
 import packageJson from '../../package.json' with { type: 'json' };
 import { ENV_MANIFEST, coerceEnv } from './env.manifest.js';
 
@@ -25,6 +27,8 @@ export const config = Object.freeze({
     logPath: raw.LOG_PATH,
     corsAllowedOrigins: raw.CORS_ALLOWED_ORIGINS,
     commitSha: process.env.COMMIT_SHA || 'unknown',
+    // Resolved once, against the directory the collector was started from.
+    webRoot: raw.WEB_ROOT ? resolve(raw.WEB_ROOT) : null,
   },
   db: {
     path: raw.DB_PATH,

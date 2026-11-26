@@ -160,6 +160,11 @@ access log, error handler, then `/v1`) and **does not listen**. The integration
 test boots exactly this object. Fastify's own logger is off: Winston is the one
 logger.
 
+When `WEB_ROOT` is set (`npm start` and the Docker image set it), `server.js`
+also registers `app/dashboard.js`: the built dashboard served at `/`, behind the
+same loopback guard, with a content security policy that allows exactly the
+hash of SvelteKit's inline boot script. One process, one origin, no CORS.
+
 `app/index.js` is the process. It listens on `HOST` (default `127.0.0.1`) and
 `PORT` (default `4317`), and on `SIGTERM` closes Fastify, which lets in-flight
 requests finish, before closing the database file.

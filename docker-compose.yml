@@ -1,0 +1,32 @@
+# docker compose up -d --build   →   http://127.0.0.1:4317
+#
+# Then point Claude Code at it once, from the host: npm run hooks:install
+services:
+  panel:
+    build: .
+    image: dashboard-code-ai
+    restart: unless-stopped
+    # Host networking: hooks arrive from 127.0.0.1 and the loopback guard
+    # accepts them. Through a published port they would come from the bridge
+    # gateway and be refused. On Docker Desktop (macOS/Windows) turn on
+    # Settings → Resources → Network → "Enable host networking".
+    network_mode: host
+    environment:
+      HOST: 127.0.0.1
+      PORT: ${PANEL_PORT:-4317}
+      WATCH_DOCKER: ${WATCH_DOCKER:-true}
+      WATCH_FILES: ${WATCH_FILES:-true}
+      WATCH_SECURITY: ${WATCH_SECURITY:-true}
+    volumes:
+      # Events survive restarts.
+      - panel-data:/data
+      # Hooks report each session's folder as a host path. Mounting the folder
+      # that holds your projects at the same path lets the file watcher and
+      # npm audit find them. Read-only: the panel never writes there.
+      - ${PROJECTS_DIR:-${HOME}}:${PROJECTS_DIR:-${HOME}}:ro
+      # Containers card. Access to this socket is root-equivalent on the host;
+      # remove the line (and set WATCH_DOCKER=false) to run without it.
+      - /var/run/docker.sock:/var/run/docker.sock
+
+volumes:
+  panel-data:
