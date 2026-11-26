@@ -113,7 +113,10 @@ const toolEnd = status => (payload, now) => {
     ...toolBase(payload, now),
     kind: 'tool.end',
     status,
-    data: { output: truncate(output) },
+    data: {
+      output: truncate(output),
+      ...(payload.tool_input?.command && { command: truncate(payload.tool_input.command, 500) }),
+    },
   };
   const derive = DERIVED_BY_CATEGORY[event.category];
   const derived = derive ? derive(payload, event, output) : [];

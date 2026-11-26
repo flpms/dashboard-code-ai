@@ -95,6 +95,25 @@
  */
 
 /**
+ * @typedef {Object} Advisory
+ * @property {string} package
+ * @property {'critical'|'high'|'moderate'|'low'|'info'} severity
+ * @property {string} title
+ * @property {string} url
+ */
+
+/**
+ * The latest dependency audit of the session folder.
+ *
+ * @typedef {Object} SecurityReport
+ * @property {number} ms
+ * @property {string} tool
+ * @property {number} total
+ * @property {Record<string, number>} counts
+ * @property {Advisory[]} advisories
+ */
+
+/**
  * @typedef {Object} Alert
  * @property {'warning'|'critical'} level
  * @property {string} message
@@ -112,6 +131,7 @@
  * @property {FileActivity[]} filesChanged
  * @property {number} filesRead
  * @property {{ skills: Count[], mcp: Count[], agentTypes: Count[] }} resources
+ * @property {SecurityReport|null} security
  * @property {Alert[]} alerts
  */
 

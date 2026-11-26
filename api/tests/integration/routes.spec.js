@@ -10,7 +10,7 @@ import { DBStartup } from '../../app/config/db.config.js';
 import { enums } from '../../app/enums/index.js';
 import lib from '../../app/lib/index.js';
 import { Server } from '../../app/server.js';
-import { fakeClock, fakeFileWatcher, fakeLogger } from '../helpers/fakes.js';
+import { fakeClock, fakeFileWatcher, fakeLogger, fakeSecurityAuditor } from '../helpers/fakes.js';
 
 /**
  * Boots the real server over an in-memory SQLite database.
@@ -33,7 +33,7 @@ const env = {
     corsAllowedOrigins: WEB_ORIGIN,
   },
   db: { path: ':memory:' },
-  watchers: { docker: false, files: false },
+  watchers: { docker: false, files: false, security: false },
 };
 
 const Logger = fakeLogger();
@@ -74,6 +74,7 @@ describe('v1 routes', () => {
       services: {
         dockerWatcher: { start: () => {}, stop: () => {} },
         fileWatcher: fakeFileWatcher(),
+        securityAuditor: fakeSecurityAuditor(),
       },
     });
     await app.ready();

@@ -3,13 +3,15 @@
 Instruments for AI coding sessions. While Claude Code works, this dashboard
 shows — live — which agents and subagents are running, every tool call on a
 flamegraph-like timeline, the Docker containers the session started, how the
-tests are going, which files changed, and which skills and MCP servers were
-used.
+tests are going, which files changed, which skills and MCP servers were
+used, and which known vulnerabilities (CVEs/GHSAs) the project's dependencies
+carry.
 
 ```
 Claude Code ── HTTP hooks ──┐
 docker events ──────────────┼──► collector (api/, Node + SQLite) ── SSE ──► dashboard (web/, SvelteKit)
-file watcher ───────────────┘
+file watcher ───────────────┤
+npm audit ──────────────────┘
 ```
 
 Everything runs on your machine. The collector binds to `127.0.0.1` and refuses
@@ -56,14 +58,16 @@ Claude Code keeps working with the dashboard closed.
 | Tests | The summary line of the runner's output (Vitest, Jest, `node --test`, pytest), read from the Bash hook. |
 | Files | `Edit` / `Write` hooks (with author), plus a watcher on the session folder for changes made by scripts and generators. |
 | Resources | `Skill`, `Agent` and `mcp__*` tool calls. |
-| Alerts | Last test run failing, a container that died with a non-zero code, a tool failing 3 times in a row. |
+| Security | `npm audit --json` in the session folder: at session start, and again when `package.json` / `package-lock.json` change or an install command runs. Needs a `package-lock.json`; npm only for now. |
+| Alerts | Critical or high vulnerabilities, last test run failing, a container that died with a non-zero code, a tool failing 3 times in a row. |
 
 ---
 
 ## Configuration
 
 Every variable has a default; see [`api/.env.example`](api/.env.example).
-`WATCH_DOCKER=false` and `WATCH_FILES=false` turn the two watchers off;
+`WATCH_DOCKER=false`, `WATCH_FILES=false` and `WATCH_SECURITY=false` turn the
+watchers off (the audit calls the npm registry, so turn it off when offline);
 `DB_PATH` moves the SQLite file (default `api/data/events.db`).
 
 ---

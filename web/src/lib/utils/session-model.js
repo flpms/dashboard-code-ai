@@ -6,7 +6,7 @@
  * truth, and this is a projection of it. Each event kind is a row in
  * REDUCERS; a kind with no row is simply ignored.
  *
- * @import { Alert, AgentLane, CollectorEvent, ContainerState, Count, FileActivity, SessionModel, TestRun, ToolSpan } from '$lib/types.js'
+ * @import { Alert, AgentLane, CollectorEvent, ContainerState, Count, FileActivity, SecurityReport, SessionModel, TestRun, ToolSpan } from '$lib/types.js'
  */
 
 const MAIN = 'main';
@@ -42,6 +42,7 @@ const MCP_SERVER = /^mcp__([^_]+(?:_[^_]+)*?)__/;
  * @property {Map<string, number>} mcp
  * @property {Map<string, number>} agentTypes
  * @property {Map<string, { name: string, count: number }>} streaks
+ * @property {SecurityReport|null} security
  * @property {number} startMs
  * @property {number} endMs
  */
@@ -58,6 +59,7 @@ const emptyAccumulator = () => ({
   mcp: new Map(),
   agentTypes: new Map(),
   streaks: new Map(),
+  security: null,
   startMs: Infinity,
   endMs: -Infinity,
 });
@@ -191,6 +193,11 @@ const REDUCERS = {
       source: event.data.source === 'watcher' && previous?.source !== 'tool' ? 'watcher' : 'tool',
     });
   },
+  // Only the latest audit matters: it describes the dependencies as they are now.
+  'security.audit': (acc, event, ms) => {
+    const { tool = 'npm', total = 0, counts = {}, advisories = [] } = event.data;
+    acc.security = { ms, tool, total, counts, advisories };
+  },
   'file.read': (acc, event) => {
     acc.reads.add(String(event.data.path ?? ''));
   },
@@ -285,7 +292,18 @@ const alertsOf = acc => {
       ? [{ level: 'critical', message: `${lastRun.failed} teste(s) falhando na última execução` }]
       : [];
 
-  return [...tests, ...containers, ...streaks];
+  const serious = (acc.security?.counts.critical ?? 0) + (acc.security?.counts.high ?? 0);
+  /** @type {Alert[]} */
+  const security = serious
+    ? [
+        {
+          level: 'critical',
+          message: `${serious} vulnerabilidade(s) crítica(s) ou alta(s) nas dependências`,
+        },
+      ]
+    : [];
+
+  return [...tests, ...security, ...containers, ...streaks];
 };
 
 /**
@@ -327,6 +345,7 @@ export const buildSessionModel = (events, nowMs) => {
       mcp: toCounts(acc.mcp),
       agentTypes: toCounts(acc.agentTypes),
     },
+    security: acc.security,
     alerts: alertsOf(acc),
   };
 };

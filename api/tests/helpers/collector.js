@@ -7,7 +7,7 @@ import { EventBus } from '../../app/lib/event-bus.js';
 import { Repositories } from '../../app/v1/repositories/index.js';
 import { Serializers } from '../../app/v1/serializers/index.js';
 import { Collector } from '../../app/v1/use-cases/collector.js';
-import { fakeClock, fakeFileWatcher, fakeLogger } from './fakes.js';
+import { fakeClock, fakeFileWatcher, fakeLogger, fakeSecurityAuditor } from './fakes.js';
 
 /**
  * A collector over a real in-memory SQLite database. SQLite ships with Node, so
@@ -26,6 +26,7 @@ export const buildCollector = () => {
   const clock = fakeClock();
   const eventBus = EventBus();
   const fileWatcher = fakeFileWatcher();
+  const securityAuditor = fakeSecurityAuditor();
   const published = [];
   eventBus.subscribe(event => published.push(event));
 
@@ -34,8 +35,8 @@ export const buildCollector = () => {
     ...deps,
     repositories: Repositories(deps),
     serializers: Serializers,
-    services: { fileWatcher },
+    services: { fileWatcher, securityAuditor },
   });
 
-  return { collector, clock, db, fileWatcher, Logger, published };
+  return { collector, clock, db, fileWatcher, Logger, published, securityAuditor };
 };

@@ -37,6 +37,31 @@ const event = (seconds, fields) => ({
 /** @type {CollectorEvent[]} */
 export const SESSION_EVENTS = [
   event(0, { kind: 'session.start', data: { cwd: '/repo' } }),
+  event(0, {
+    kind: 'security.audit',
+    name: 'npm audit',
+    category: 'security',
+    status: 'error',
+    data: {
+      tool: 'npm',
+      total: 2,
+      counts: { critical: 1, high: 1, moderate: 0, low: 0, info: 0 },
+      advisories: [
+        {
+          package: 'minimist',
+          severity: 'critical',
+          title: 'Prototype Pollution in minimist',
+          url: 'https://github.com/advisories/GHSA-xvch-5gv4-984h',
+        },
+        {
+          package: 'lodash',
+          severity: 'high',
+          title: 'Command Injection in lodash',
+          url: 'javascript:alert(1)',
+        },
+      ],
+    },
+  }),
   event(1, {
     kind: 'tool.start',
     spanId: 'r1',

@@ -9,7 +9,7 @@ export const SessionsRepository = ({ db, logger }) => {
   logger.info('Start Table - sessions');
 
   const statements = {
-    find: db.prepare('SELECT id FROM sessions WHERE id = ?'),
+    find: db.prepare('SELECT id, cwd FROM sessions WHERE id = ?'),
     upsert: db.prepare(
       `INSERT INTO sessions (id, cwd, started_at, last_event_at, event_count)
        VALUES (?, ?, ?, ?, ?)
@@ -39,6 +39,7 @@ export const SessionsRepository = ({ db, logger }) => {
       return isNew;
     },
     end: (id, ts) => statements.end.run(ts, id),
+    cwdOf: id => statements.find.get(id)?.cwd ?? null,
     list: limit => statements.list.all(limit),
     mostRecentActiveSince: sinceTs => statements.mostRecentSince.get(sinceTs)?.id ?? null,
   };

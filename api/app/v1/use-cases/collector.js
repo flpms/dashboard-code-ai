@@ -2,6 +2,7 @@
 
 import { parseDockerLine } from '../domain/docker-event.js';
 import { normalizeHook } from '../domain/hook-normalizer.js';
+import { isDependencyFile, isInstallCommand, parseNpmAudit } from '../domain/npm-audit.js';
 
 /**
  * The collector's rules: turn hooks, container events and file changes into
@@ -31,7 +32,7 @@ export const Collector = dependencies => {
     Logger,
     repositories: { eventsRepository, sessionsRepository },
     serializers: { serializeEventList, serializeSessionList },
-    services: { fileWatcher },
+    services: { fileWatcher, securityAuditor },
   } = dependencies;
 
   const recentToolWrites = new Map();
@@ -91,6 +92,11 @@ export const Collector = dependencies => {
     return published;
   };
 
+  // Events after which the session's dependencies may have changed.
+  const touchesDependencies = event =>
+    (event.kind === 'file.change' && isDependencyFile(event.data.path)) ||
+    (event.kind === 'tool.end' && isInstallCommand(event.data.command));
+
   const SESSION_SIDE_EFFECTS = Object.freeze({
     'session.end': ({ sessionId, ts }) => {
       sessionsRepository.end(sessionId, ts);
@@ -113,7 +119,16 @@ export const Collector = dependencies => {
 
       // Sessions started before the collector still get a watcher: the first
       // hook of any kind is enough to know where the session works.
-      if (isNew && data.cwd) fileWatcher.watch(first.sessionId, data.cwd);
+      // ...and a first security audit, so the instrument has a baseline
+      // before the agent changes anything.
+      if (isNew && data.cwd) {
+        fileWatcher.watch(first.sessionId, data.cwd);
+        securityAuditor.request(first.sessionId, data.cwd);
+      }
+
+      if (data.cwd && events.some(touchesDependencies)) {
+        securityAuditor.request(first.sessionId, data.cwd);
+      }
 
       events.forEach(store);
       events.forEach(event => SESSION_SIDE_EFFECTS[event.kind]?.(event));
@@ -217,6 +232,9 @@ export const Collector = dependencies => {
     try {
       const ts = clock();
 
+      if (isDependencyFile(path))
+        securityAuditor.request(sessionId, sessionsRepository.cwdOf(sessionId));
+
       if (isEcho(sessionId, path, ts)) return null;
 
       sessionsRepository.touch({ id: sessionId, cwd: null, ts, count: 1 });
@@ -240,6 +258,42 @@ export const Collector = dependencies => {
   };
 
   /**
+   * @param {{ key: string, cwd: string, output: string }} result  an npm audit run, `key` = session id
+   * @returns {object|null} the stored event, or null when the output was not an audit report
+   */
+  const recordAudit = ({ key: sessionId, cwd, output }) => {
+    try {
+      const summary = parseNpmAudit(output);
+
+      if (!summary) {
+        Logger.verbose(`Collector::recordAudit - no report for ${cwd}`);
+        return null;
+      }
+
+      const ts = clock();
+      const serious = summary.counts.critical + summary.counts.high;
+
+      sessionsRepository.touch({ id: sessionId, cwd: null, ts, count: 1 });
+
+      return store({
+        sessionId,
+        ts,
+        kind: 'security.audit',
+        agentId: 'main',
+        agentType: null,
+        spanId: null,
+        name: 'npm audit',
+        category: 'security',
+        status: serious ? 'error' : 'ok',
+        data: { ...summary, cwd },
+      });
+    } catch (error) {
+      logFailure('Collector::recordAudit', error);
+      return null;
+    }
+  };
+
+  /**
    * @param {string} line  one line of `docker events --format '{{json .}}'`
    * @returns {object|null}
    */
@@ -250,6 +304,7 @@ export const Collector = dependencies => {
 
   return {
     ingestHook,
+    recordAudit,
     listSessionEvents,
     listSessions,
     recordContainerEvent,

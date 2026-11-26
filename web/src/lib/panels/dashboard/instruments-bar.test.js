@@ -20,7 +20,19 @@ describe('InstrumentsBar', () => {
     expect(reading('Testes').getByText('10 ✓ · 0 ✗')).toBeInTheDocument();
     expect(reading('Arquivos').getByText('src/app.js')).toBeInTheDocument();
     expect(reading('Recursos').getByText(/code-style/)).toBeInTheDocument();
-    expect(reading('Alertas').getByText('nenhum')).toBeInTheDocument();
+    expect(reading('Alertas').getByText('1')).toBeInTheDocument();
+  });
+
+  it('shows the dependency audit and links only to https advisories', () => {
+    render(InstrumentsBar, { model, cwd: '/repo' });
+
+    const security = within(screen.getByRole('region', { name: 'Segurança' }));
+    expect(security.getByText('2 vulnerab.')).toBeInTheDocument();
+
+    const safe = security.getByText(/minimist: Prototype Pollution/);
+    const unsafe = security.getByText(/lodash: Command Injection/);
+    expect(safe).toHaveAttribute('href', 'https://github.com/advisories/GHSA-xvch-5gv4-984h');
+    expect(unsafe).not.toHaveAttribute('href');
   });
 
   it('reads sensibly before anything happened', () => {
@@ -28,5 +40,6 @@ describe('InstrumentsBar', () => {
 
     expect(screen.getByText('sem execução')).toBeInTheDocument();
     expect(screen.getByText('0 alterados')).toBeInTheDocument();
+    expect(screen.getByText('sem auditoria')).toBeInTheDocument();
   });
 });
