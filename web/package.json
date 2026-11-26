@@ -28,7 +28,7 @@
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.65.1",
     "@sveltejs/adapter-static": "^3.0.11",
-    "@sveltejs/kit": "^2.70.4",
+    "@sveltejs/kit": "^3.4.1",
     "@sveltejs/vite-plugin-svelte": "^7.3.2",
     "@tailwindcss/vite": "^4.3.5",
     "@testing-library/jest-dom": "^8.0.0",
