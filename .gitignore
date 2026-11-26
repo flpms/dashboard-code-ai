@@ -1,0 +1,13 @@
+node_modules/
+.env
+.env.*
+!.env.example
+build/
+.svelte-kit/
+coverage/
+logs/
+mongo-volume/
+playwright-report/
+test-results/
+*.log
+.DS_Store

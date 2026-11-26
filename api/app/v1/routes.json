@@ -1,0 +1,66 @@
+{
+  "healthCheck": {
+    "path": "/",
+    "method": "get",
+    "auth": false,
+    "roles": false,
+    "tenant": false,
+    "validate": false
+  },
+  "signIn": {
+    "path": "/auth/token",
+    "method": "post",
+    "auth": false,
+    "roles": false,
+    "tenant": false,
+    "validate": true
+  },
+  "verifyToken": {
+    "path": "/auth/verify",
+    "method": "get",
+    "auth": true,
+    "roles": false,
+    "tenant": false,
+    "validate": false
+  },
+  "createItem": {
+    "path": "/tenant/:tenantId/items",
+    "method": "post",
+    "auth": true,
+    "roles": ["super-admin", "admin", "member"],
+    "tenant": true,
+    "validate": true
+  },
+  "listItems": {
+    "path": "/tenant/:tenantId/items",
+    "method": "get",
+    "auth": true,
+    "roles": ["super-admin", "admin", "member", "read-only"],
+    "tenant": true,
+    "validate": true
+  },
+  "getItem": {
+    "path": "/tenant/:tenantId/items/:id",
+    "method": "get",
+    "auth": true,
+    "roles": ["super-admin", "admin", "member", "read-only"],
+    "tenant": true,
+    "validate": true
+  },
+  "updateItem": {
+    "path": "/tenant/:tenantId/items/:id",
+    "method": "patch",
+    "auth": true,
+    "roles": ["super-admin", "admin", "member"],
+    "tenant": true,
+    "validate": true
+  },
+  "deleteItem": {
+    "path": "/tenant/:tenantId/items/:id",
+    "method": "delete",
+    "auth": true,
+    "roles": ["super-admin", "admin"],
+    "tenant": true,
+    "validate": true
+  }
+}
