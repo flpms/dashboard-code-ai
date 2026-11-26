@@ -52,13 +52,11 @@ The same applies when the outcomes are behaviour rather than values. This is how
 
 ```javascript
 const GUARD_BUILDERS = Object.freeze({
-  auth: ({ requireAuthToken }) => requireAuthToken,
-  roles: ({ permissions }, value) => permissions(value),
-  tenant: ({ requireTenantScope }) => requireTenantScope,
+  local: ({ requireLoopback }) => requireLoopback,
 });
 
 // Order is data too — and being data, it is reviewable.
-const GUARD_ORDER = Object.freeze(['auth', 'roles', 'tenant']);
+const GUARD_ORDER = Object.freeze(['local']);
 
 const buildGuards = (deps, route) =>
   GUARD_ORDER.filter(flag => Boolean(route[flag])).map(flag =>
@@ -133,12 +131,12 @@ Every unit in this codebase is a function that takes its dependencies and
 returns an object of functions. No `class`, no `new`, no `this`, no inheritance.
 
 ```javascript
-export const ItemsRepository = ({ db, collections, logger }) => {
-  const collection = db.collection(collections.items);
+export const SessionsRepository = ({ db, logger }) => {
+  logger.info('Start Table - sessions');
+  const find = db.prepare('SELECT id, cwd FROM sessions WHERE id = ?');
 
   return {
-    findOne: (tenantId, query) => collection.findOne({ ...query, tenantId, deleted: false }),
-    insertOne: document => collection.insertOne(document),
+    cwdOf: id => find.get(id)?.cwd ?? null,
   };
 };
 ```
@@ -161,12 +159,13 @@ the web — is the only place allowed to know about everything.
 
 ```javascript
 // ✗ Untestable without a real environment, and invisible in the signature.
-import { db } from '../db.js';
-const getUser = email => db.collection(process.env.USERS_COLLECTION).findOne({ email });
+import { spawn } from 'node:child_process';
+const audit = cwd => spawn('npm', ['audit', '--json'], { cwd, timeout: Number(process.env.AUDIT_TIMEOUT) });
 
-// ✓ Both dependencies are arguments. The function runs anywhere.
-export const UsersRepository = ({ db, collections }) => ({
-  findOne: query => db.collection(collections.users).findOne(query),
+// ✓ Both dependencies are arguments. The function runs anywhere, and a test
+// passes a fake `spawn` that answers with a fixture.
+export const SecurityAuditor = ({ spawn, timeoutMs }) => ({
+  audit: cwd => spawn('npm', ['audit', '--json'], { cwd, timeout: timeoutMs }),
 });
 ```
 
@@ -207,14 +206,15 @@ decorating `request`, and a reducer writing into its own accumulator.
 
 ```javascript
 // ✗
-const query = { tenantId };
-if (search) query.name = { $regex: search, $options: 'i' };
-if (status) query.status = status;
+const event = { kind, ts };
+if (agentId) event.agentId = agentId;
+if (status) event.status = status;
 
 // ✓ The object is built in one expression, and it is `const`.
-const query = {
-  tenantId,
-  ...(search && { name: { $regex: search, $options: 'i' } }),
+const event = {
+  kind,
+  ts,
+  ...(agentId && { agentId }),
   ...(status && { status }),
 };
 ```
@@ -228,8 +228,8 @@ three deep.
 
 ```javascript
 // ✓ Each name is a fact the next reader does not have to derive.
-const scoped = (tenantId, query = {}) => ({ ...query, tenantId, deleted: false });
-const isExpired = token => token.exp * 1000 < Date.now();
+const isDependencyFile = path => DEPENDENCY_FILES.has(baseName(path));
+const isStale = (lastEventAt, nowMs) => nowMs - Date.parse(lastEventAt) > STALE_MS;
 const messageFor = (status, body) => body?.message || MESSAGES[status] || 'Erro inesperado.';
 ```
 
@@ -245,7 +245,7 @@ thing the next person would otherwise "simplify" back into a defect.
   `onFinish` — `onFinish.NOT_FOUND(...)`, `onFinish.CONFLICT(...)`.
 - 5xx bodies say nothing specific. The detail goes to the log, keyed to the
   request. A stack trace in a response body is a gift to an attacker.
-- Never `catch {}` silently. Log with the location (`Items::createItem`), then
+- Never `catch {}` silently. Log with the location (`Collector::ingestHook`), then
   choose an outcome.
 - `catch (error)` receives `unknown`. Narrow it once —
   `error instanceof Error ? error.message : 'Erro inesperado.'` — rather than
@@ -255,11 +255,11 @@ thing the next person would otherwise "simplify" back into a defect.
 
 ## 8. Naming
 
-| Artifact              | Convention                        | Example                        |
-| --------------------- | --------------------------------- | ------------------------------ |
-| Factory / composition | PascalCase                        | `ItemsRepository`, `ApiClient` |
-| Function / value      | camelCase                         | `statusLabel`, `messageFor`    |
-| Constant table        | SCREAMING_SNAKE + `Object.freeze` | `STATUS_LABELS`                |
+| Artifact              | Convention                        | Example                         |
+| --------------------- | --------------------------------- | ------------------------------- |
+| Factory / composition | PascalCase                        | `EventsRepository`, `ApiClient` |
+| Function / value      | camelCase                         | `statusLabel`, `messageFor`     |
+| Constant table        | SCREAMING_SNAKE + `Object.freeze` | `STATUS_LABELS`                 |
 | File                  | kebab-case, suffixed by layer     | `items.repository.js`          |
 | Svelte component      | kebab-case file, PascalCase import | `items-table.svelte`          |
 | Boolean               | `is` / `has` / `can` prefix       | `isAuthenticated`, `canGoBack` |

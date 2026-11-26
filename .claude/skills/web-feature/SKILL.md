@@ -34,22 +34,22 @@ export const orderSchema = z.object({
 
 ### 2. Service → `src/lib/services/<resource>.service.js`
 
-A factory over `ApiClient`. Tenant is a parameter, never a module constant.
+A factory over `ApiClient`. Ids are parameters, never module constants.
 
 ```javascript
 export const OrdersService = client => {
-  const base = tenantId => `/v1/tenant/${tenantId}/orders`;
+  const base = sessionId => `/v1/sessions/${encodeURIComponent(sessionId)}/orders`;
 
   return {
-    list: (tenantId, query) => client.get(`${base(tenantId)}?${new URLSearchParams(query)}`),
-    create: (tenantId, attributes) => client.post(base(tenantId), attributes),
+    list: (sessionId, query) => client.get(`${base(sessionId)}?${new URLSearchParams(query)}`),
+    create: (sessionId, attributes) => client.post(base(sessionId), attributes),
   };
 };
 ```
 
-Forbidden here: importing `session`, importing another service, holding mutable
+Forbidden here: importing a store, importing another service, holding mutable
 module state, calling `fetch` directly. `ApiClient` is the only door to HTTP —
-it is where the token, the error-message table and the 401 handling live.
+it is where the base URL, the error-message table and the SSE subscription live.
 
 ### 3. Panel → `src/lib/panels/<domain>/<thing>.svelte`
 
@@ -67,15 +67,14 @@ three literal objects.
 Always render a real empty state. A table with zero rows and no message reads as
 a bug.
 
-### 4. Page → `src/routes/(app)/<route>/+page.svelte`
+### 4. Page → `src/routes/<route>/+page.svelte`
 
 The only layer that knows about all the others. It builds the service, holds
 screen state in runes, and hands plain data down.
 
 ```svelte
 <script>
-  const client = ApiClient({ getToken: () => session.token, onUnauthorized: () => session.clear() });
-  const orders = OrdersService(client);
+  const orders = OrdersService(ApiClient());
 
   /** @type {Order[]} */
   let rows = $state([]);
