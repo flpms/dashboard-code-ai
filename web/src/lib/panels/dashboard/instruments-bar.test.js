@@ -14,20 +14,22 @@ describe('InstrumentsBar', () => {
 
     const reading = name => within(screen.getByRole('region', { name }));
 
-    expect(reading('Agentes').getByText('0 ativos')).toBeInTheDocument();
-    expect(reading('Containers').getByText('1 de pé')).toBeInTheDocument();
+    const tile = name => screen.getByRole('region', { name });
+
+    expect(tile('Agentes')).toHaveTextContent(/0\s*ativos de/);
+    expect(tile('Containers')).toHaveTextContent(/1\s*de pé/);
     expect(reading('Containers').getByText('db')).toBeInTheDocument();
-    expect(reading('Testes').getByText('10 ✓ · 0 ✗')).toBeInTheDocument();
+    expect(tile('Testes')).toHaveTextContent(/10\s*passaram · 0 falharam/);
     expect(reading('Arquivos').getByText('src/app.js')).toBeInTheDocument();
     expect(reading('Recursos').getByText(/code-style/)).toBeInTheDocument();
-    expect(reading('Alertas').getByText('1')).toBeInTheDocument();
+    expect(tile('Alertas')).toHaveTextContent(/^alertas\s*1/i);
   });
 
   it('shows the dependency audit and links only to https advisories', () => {
     render(InstrumentsBar, { model, cwd: '/repo' });
 
     const security = within(screen.getByRole('region', { name: 'Segurança' }));
-    expect(security.getByText('2 vulnerab.')).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Segurança' })).toHaveTextContent(/2\s*vulnerab\./);
 
     const safe = security.getByText(/minimist: Prototype Pollution/);
     const unsafe = security.getByText(/lodash: Command Injection/);
@@ -39,7 +41,7 @@ describe('InstrumentsBar', () => {
     render(InstrumentsBar, { model: buildSessionModel([], 0) });
 
     expect(screen.getByText('sem execução')).toBeInTheDocument();
-    expect(screen.getByText('0 alterados')).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Arquivos' })).toHaveTextContent(/0\s*alterados/);
     expect(screen.getByText('sem auditoria')).toBeInTheDocument();
   });
 });
