@@ -2,8 +2,8 @@
 
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { mkdirSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { existsSync, mkdirSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
 import chalk from 'chalk';
@@ -21,6 +21,8 @@ const start = async () => {
     DatabaseSync,
     dirname,
     enums,
+    existsSync,
+    join,
     Joi,
     lib,
     mkdirSync,

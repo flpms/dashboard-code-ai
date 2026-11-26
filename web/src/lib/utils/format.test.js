@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { baseName, formatDateTime, formatDuration, shortPath } from './format.js';
+import { baseName, formatDateTime, formatDuration, safeLink, shortPath } from './format.js';
 
 describe('format helpers', () => {
   it('renders an em dash for a missing date instead of "Invalid Date"', () => {
@@ -28,5 +28,13 @@ describe('format helpers', () => {
   it('names a session by its last folder', () => {
     expect(baseName('/home/me/projects/api')).toBe('api');
     expect(baseName(null)).toBe('—');
+  });
+
+  it('only lets https links through', () => {
+    expect(safeLink('https://github.com/advisories/GHSA-1')).toBe(
+      'https://github.com/advisories/GHSA-1'
+    );
+    expect(safeLink('javascript:alert(1)')).toBeUndefined();
+    expect(safeLink(null)).toBeUndefined();
   });
 });

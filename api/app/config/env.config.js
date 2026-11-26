@@ -32,6 +32,7 @@ export const config = Object.freeze({
   watchers: {
     docker: raw.WATCH_DOCKER,
     files: raw.WATCH_FILES,
+    security: raw.WATCH_SECURITY,
   },
 });
 

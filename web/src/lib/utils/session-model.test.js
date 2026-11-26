@@ -67,8 +67,19 @@ describe('buildSessionModel', () => {
     expect(model.resources.agentTypes).toEqual([{ name: 'Explore', count: 1 }]);
   });
 
-  it('raises no alert once the tests pass again', () => {
-    expect(model.alerts).toEqual([]);
+  it('keeps the latest dependency audit and alerts on critical or high findings', () => {
+    expect(model.security?.counts.critical).toBe(1);
+    expect(model.alerts).toEqual([
+      { level: 'critical', message: '2 vulnerabilidade(s) crítica(s) ou alta(s) nas dependências' },
+    ]);
+  });
+
+  it('raises no alert once the tests pass and the audit is clean', () => {
+    const clean = extra(400, {
+      kind: 'security.audit',
+      data: { tool: 'npm', total: 0, counts: { critical: 0, high: 0 }, advisories: [] },
+    });
+    expect(buildSessionModel([...SESSION_EVENTS, clean], NOW).alerts).toEqual([]);
   });
 
   it('raises alerts for failing tests, a dead container and a stuck tool', () => {
@@ -87,6 +98,7 @@ describe('buildSessionModel', () => {
 
     expect(alerts.map(alert => alert.message)).toEqual([
       '2 teste(s) falhando na última execução',
+      '2 vulnerabilidade(s) crítica(s) ou alta(s) nas dependências',
       'Container db caiu (código 137)',
       'Bash falhou 3 vezes seguidas',
     ]);

@@ -93,3 +93,14 @@ export const fakeClock = (start = '2026-11-26T12:00:00.000Z') => {
   };
   return clock;
 };
+
+/** Records which folders the use cases asked to audit. */
+export const fakeSecurityAuditor = () => {
+  const requests = [];
+  return {
+    requests,
+    start: () => {},
+    request: (sessionId, cwd) => requests.push([sessionId, cwd]),
+    stop: () => {},
+  };
+};

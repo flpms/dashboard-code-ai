@@ -34,10 +34,12 @@ export const RoutesV1 = deps => async app => {
 
   services.dockerWatcher.start(useCases.recordDockerLine);
   services.fileWatcher.start(useCases.recordFileChange);
+  services.securityAuditor.start(useCases.recordAudit);
 
   app.addHook('onClose', async () => {
     services.dockerWatcher.stop();
     services.fileWatcher.stopAll();
+    services.securityAuditor.stop();
   });
 
   routeProcessor({

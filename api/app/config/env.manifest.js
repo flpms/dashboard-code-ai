@@ -51,6 +51,11 @@ export const ENV_MANIFEST = Object.freeze({
     fallback: true,
     doc: 'Follow `docker events` and attribute containers to sessions',
   },
+  WATCH_SECURITY: {
+    kind: 'boolean',
+    fallback: true,
+    doc: 'Run `npm audit` when a session starts and when its dependencies change',
+  },
   WATCH_FILES: {
     kind: 'boolean',
     fallback: true,

@@ -61,3 +61,12 @@ export const shortPath = (path, cwd) => {
  * @returns {string}
  */
 export const baseName = path => (path ? (path.split(/[\\/]/).filter(Boolean).at(-1) ?? path) : '—');
+
+/**
+ * A link from collected data (an advisory URL) is only rendered when it is
+ * plain https — never a `javascript:` or `data:` URL smuggled into a report.
+ *
+ * @param {string|null|undefined} url
+ * @returns {string|undefined}
+ */
+export const safeLink = url => (/^https:\/\//i.test(url ?? '') ? (url ?? undefined) : undefined);

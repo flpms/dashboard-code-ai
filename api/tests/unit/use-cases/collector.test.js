@@ -187,3 +187,76 @@ describe('Collector::recordFileChange', () => {
     assert.ok(collector.recordFileChange({ sessionId: 's1', path: '/repo/a.js' }));
   });
 });
+
+describe('Collector security audits', () => {
+  it('asks for a baseline audit when a session is first seen', async () => {
+    const { collector, securityAuditor } = buildCollector();
+
+    await ingest(collector, hook('SessionStart'));
+    await ingest(collector, hook('Stop'));
+
+    assert.deepEqual(securityAuditor.requests, [['s1', '/repo']]);
+  });
+
+  it('asks again after an install command or a lockfile edit', async () => {
+    const { collector, securityAuditor } = buildCollector();
+    await ingest(collector, hook('SessionStart'));
+
+    await ingest(
+      collector,
+      hook('PostToolUse', {
+        tool_name: 'Bash',
+        tool_use_id: 'b1',
+        tool_input: { command: 'npm install lodash' },
+        tool_response: { stdout: 'added 1 package' },
+      })
+    );
+    await ingest(
+      collector,
+      hook('PostToolUse', {
+        tool_name: 'Edit',
+        tool_use_id: 'e1',
+        tool_input: { file_path: '/repo/package.json' },
+        tool_response: {},
+      })
+    );
+    await ingest(
+      collector,
+      hook('PostToolUse', {
+        tool_name: 'Edit',
+        tool_use_id: 'e2',
+        tool_input: { file_path: '/repo/src/a.js' },
+        tool_response: {},
+      })
+    );
+
+    assert.equal(securityAuditor.requests.length, 3);
+  });
+
+  it('asks when the watcher sees the lockfile change', async () => {
+    const { collector, securityAuditor } = buildCollector();
+    await ingest(collector, hook('SessionStart'));
+
+    collector.recordFileChange({ sessionId: 's1', path: '/repo/package-lock.json' });
+
+    assert.deepEqual(securityAuditor.requests.at(-1), ['s1', '/repo']);
+  });
+
+  it('stores an audit, marked as an error when anything critical or high is found', async () => {
+    const { readFileSync } = await import('node:fs');
+    const output = readFileSync(new URL('../../fixtures/npm-audit.json', import.meta.url), 'utf8');
+    const { collector, published } = buildCollector();
+
+    const stored = collector.recordAudit({ key: 's1', cwd: '/repo', output });
+
+    assert.equal(stored.kind, 'security.audit');
+    assert.equal(stored.status, 'error');
+    assert.equal(stored.data.counts.critical, 1);
+    assert.equal(published.at(-1).kind, 'security.audit');
+  });
+
+  it('ignores output that is not an audit report', () => {
+    const { collector } = buildCollector();
+    assert.equal(collector.recordAudit({ key: 's1', cwd: '/repo', output: 'npm ERR!' }), null);
+  });
+});

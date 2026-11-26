@@ -1,6 +1,6 @@
 <script>
   import InstrumentCard from '$lib/components/instrument-card.svelte';
-  import { shortPath } from '$lib/utils/format.js';
+  import { safeLink, shortPath } from '$lib/utils/format.js';
 
   /**
    * The fixed strip at the top: six readings a person takes in at a glance,
@@ -18,6 +18,28 @@
   };
 
   const ALERT_DOTS = { warning: 'bg-amber-400', critical: 'bg-red-500' };
+
+  const SEVERITIES = [
+    { key: 'critical', label: 'crít.', dot: 'bg-red-500' },
+    { key: 'high', label: 'alta', dot: 'bg-orange-400' },
+    { key: 'moderate', label: 'média', dot: 'bg-amber-300' },
+    { key: 'low', label: 'baixa', dot: 'bg-slate-400' },
+  ];
+
+  /** @type {Record<string, string>} */
+  const SEVERITY_DOTS = Object.fromEntries(SEVERITIES.map(level => [level.key, level.dot]));
+
+  const security = $derived(model.security);
+
+  /** @returns {'neutral'|'good'|'warning'|'critical'} */
+  const securityToneOf = () => {
+    if (!security) return 'neutral';
+    if (security.counts.critical || security.counts.high) return 'critical';
+    if (security.total) return 'warning';
+    return 'good';
+  };
+
+  const securityTone = $derived(securityToneOf());
 
   const subagents = $derived(model.agents.filter(agent => agent.id !== 'main'));
   const running = $derived(model.containers.filter(c => c.state === 'running').length);
@@ -49,7 +71,7 @@
   );
 </script>
 
-<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-6">
+<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
   <InstrumentCard
     title="Agentes"
     value={`${model.activeAgents} ativos`}
@@ -140,6 +162,47 @@
         </li>
       {/each}
     </ul>
+  </InstrumentCard>
+
+  <InstrumentCard
+    title="Segurança"
+    value={security ? `${security.total} vulnerab.` : 'sem auditoria'}
+    caption={security
+      ? `${security.tool} audit · CVEs e GHSAs conhecidos`
+      : 'precisa de package-lock.json'}
+    tone={securityTone}
+  >
+    {#if security}
+      <ul class="flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-400" aria-label="Por severidade">
+        {#each SEVERITIES as level (level.key)}
+          <li class="flex items-center gap-1 whitespace-nowrap">
+            <span class={`h-2 w-2 rounded-full ${level.dot}`} aria-hidden="true"></span>
+            {security.counts[level.key] ?? 0}
+            {level.label}
+          </li>
+        {/each}
+      </ul>
+      <ul class="flex flex-col gap-1 text-xs">
+        {#each security.advisories.slice(0, 4) as advisory (advisory.url || advisory.title)}
+          <li class="flex items-start gap-2 text-slate-300">
+            <span
+              class={`mt-1 h-2 w-2 shrink-0 rounded-full ${SEVERITY_DOTS[advisory.severity] ?? 'bg-slate-500'}`}
+              aria-hidden="true"
+            ></span>
+            <!-- An external advisory page, not an app route: resolve() does not apply. -->
+            <!-- eslint-disable svelte/no-navigation-without-resolve -->
+            <a
+              href={safeLink(advisory.url)}
+              target="_blank"
+              rel="noreferrer"
+              class="truncate hover:underline"
+              title={advisory.title}>{advisory.package}: {advisory.title}</a
+            >
+            <!-- eslint-enable svelte/no-navigation-without-resolve -->
+          </li>
+        {/each}
+      </ul>
+    {/if}
   </InstrumentCard>
 
   <InstrumentCard
