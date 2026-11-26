@@ -38,7 +38,9 @@ test.describe('dashboard', () => {
     await page.goto('/');
 
     await expect(page.getByRole('heading', { level: 1, name: 'repo' })).toBeVisible();
-    await expect(page.getByRole('region', { name: 'Testes' })).toContainText('10 ✓ · 0 ✗');
+    await expect(page.getByRole('region', { name: 'Testes' })).toContainText(
+      /10\s*passaram · 0 falharam/
+    );
     await expect(page.getByRole('region', { name: 'Containers' })).toContainText('db');
     await expect(page.getByRole('button', { name: /Grep: TODO/ })).toBeVisible();
   });
