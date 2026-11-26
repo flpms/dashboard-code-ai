@@ -79,7 +79,7 @@ export const Dashboard = deps => async app => {
     // sent as-is to browsers that accept them.
     preCompressed: true,
     cacheControl: false,
-    setHeaders: (res, path) => res.setHeader('cache-control', cacheControlFor(path)),
+    setHeaders: (reply, path) => reply.header('cache-control', cacheControlFor(path)),
   });
 
   Logger.info(`Dashboard served from ${root}`);
