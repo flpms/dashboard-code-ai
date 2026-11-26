@@ -71,3 +71,25 @@ export const fakeReply = () => {
   };
   return reply;
 };
+
+/** Records what the use cases asked the file watcher to do. */
+export const fakeFileWatcher = () => {
+  const calls = [];
+  return {
+    calls,
+    start: () => {},
+    watch: (sessionId, cwd) => calls.push(['watch', sessionId, cwd]),
+    unwatch: sessionId => calls.push(['unwatch', sessionId]),
+    stopAll: () => {},
+  };
+};
+
+/** A clock the test moves by hand. */
+export const fakeClock = (start = '2026-11-26T12:00:00.000Z') => {
+  let now = Date.parse(start);
+  const clock = () => new Date(now).toISOString();
+  clock.advance = ms => {
+    now += ms;
+  };
+  return clock;
+};

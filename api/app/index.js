@@ -1,13 +1,14 @@
 'use strict';
 
+import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import { mkdirSync } from 'node:fs';
+import { dirname } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 
-import * as storage from '@aws-sdk/client-s3';
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import chalk from 'chalk';
+import { watch } from 'chokidar';
 import Joi from 'joi';
-import jwt from 'jsonwebtoken';
-import { MongoClient, ObjectId } from 'mongodb';
 import winston from 'winston';
 
 import { StartupConfig } from './config/index.js';
@@ -15,43 +16,39 @@ import { enums } from './enums/index.js';
 import lib from './lib/index.js';
 import { Server } from './server.js';
 
-// Fastify listens on localhost by default. Inside a container that is the
-// container's own loopback, and the published port would lead nowhere.
-const HOST = '0.0.0.0';
-
 const start = async () => {
-  const dependencies = await StartupConfig({
+  const dependencies = StartupConfig({
+    DatabaseSync,
+    dirname,
     enums,
-    getSignedUrl,
     Joi,
-    jwt,
     lib,
-    MongoClient,
-    ObjectId,
+    mkdirSync,
     randomUUID,
-    storage,
+    spawn,
+    watch,
     winston,
   });
 
-  const { env, Logger, dbClient } = dependencies;
+  const { db, env, Logger } = dependencies;
 
   const app = await Server(dependencies);
 
-  // Draining in order — stop accepting and let in-flight requests finish, then
-  // close Mongo — is what keeps a rolling deploy from cutting a request in half.
+  // Stop accepting, let in-flight hooks finish, stop the watchers (onClose),
+  // then close the database file.
   const shutdown = signal => async () => {
     Logger.info(`${signal} received, shutting down`);
     await app.close();
-    await dbClient.close();
+    db.close();
     process.exit(0);
   };
 
   process.on('SIGTERM', shutdown('SIGTERM'));
   process.on('SIGINT', shutdown('SIGINT'));
 
-  await app.listen({ port: env.app.port, host: HOST });
+  await app.listen({ port: env.app.port, host: env.app.host });
 
-  Logger.info(`App running at port ${env.app.port}`);
+  Logger.info(`Collector listening on http://${env.app.host}:${env.app.port}/v1`);
 
   return app;
 };

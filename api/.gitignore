@@ -4,6 +4,6 @@ node_modules/
 !.env.example
 coverage/
 logs/
-mongo-volume/
+data/
 *.log
 .DS_Store

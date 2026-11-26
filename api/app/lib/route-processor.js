@@ -4,7 +4,7 @@
  * Turns `routes.json` into Fastify routes.
  *
  * A route is a data row, not code: the guard chain is *derived* from the flags
- * on the row, so there is exactly one place where "auth" or "roles" or
+ * on the row, so there is exactly one place where "local" or
  * "validate" is turned into behaviour. Adding an endpoint never means editing
  * this file.
  */
@@ -12,16 +12,13 @@
 // Each flag maps to the guard it contributes. Adding a new capability to
 // routes.json means adding a key here — never an `if` inside the loop below.
 const GUARD_BUILDERS = Object.freeze({
-  auth: ({ requireAuthToken }) => requireAuthToken,
-  roles: ({ permissions }, value) => permissions(value),
-  tenant: ({ requireTenantScope }) => requireTenantScope,
+  local: ({ requireLoopback }) => requireLoopback,
 });
 
 // The order the guards run in. They run as `onRequest` hooks, before the body
 // is parsed, and Fastify validates the payload only after every one of them
-// passed. An anonymous caller can neither learn which fields a schema expects
-// nor make the server parse a 5 MB body.
-const GUARD_ORDER = Object.freeze(['auth', 'roles', 'tenant']);
+// passed: a caller from another machine never makes the server parse a body.
+const GUARD_ORDER = Object.freeze(['local']);
 
 const HTTP_METHODS = Object.freeze(['get', 'post', 'put', 'patch', 'delete']);
 

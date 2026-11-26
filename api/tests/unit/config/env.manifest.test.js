@@ -13,30 +13,28 @@ const read = path => readFileSync(new URL(path, import.meta.url), 'utf8');
 
 const NAMES = Object.keys(ENV_MANIFEST);
 
-// The two copies of the list that cannot import the manifest. A name missing
-// from either fails the release at *Check environment*; failing here instead
-// turns that into a red build on the pull request that caused it.
+// The copy of the list that cannot import the manifest. A name missing from it
+// is a variable nobody can discover without reading the code.
 const exampleNames = read('../../../.env.example')
   .split('\n')
   .map(line => line.match(/^([A-Z0-9_]+)=/)?.[1])
   .filter(Boolean);
 
-const releaseWorkflow = read('../../../../.github/workflows/release-api.yml');
-
 describe('env manifest', () => {
-  it('reports every required name a source does not provide', () => {
-    const missing = missingEnvVariables({});
-    assert.deepEqual(missing, [...REQUIRED_ENV_VARIABLES]);
+  it('boots with no environment at all: nothing is required', () => {
+    assert.deepEqual(REQUIRED_ENV_VARIABLES, []);
+    assert.deepEqual(missingEnvVariables({}), []);
   });
 
   it('treats an empty string as missing, not as a value', () => {
-    const source = Object.fromEntries(REQUIRED_ENV_VARIABLES.map(name => [name, 'x']));
-    assert.deepEqual(missingEnvVariables({ ...source, JWT_SECRET: '   ' }), ['JWT_SECRET']);
+    assert.equal(coerceEnv({ fallback: 4317, kind: 'number' }, ''), 4317);
   });
 
-  it('reports nothing when every required name is present', () => {
-    const source = Object.fromEntries(REQUIRED_ENV_VARIABLES.map(name => [name, 'value']));
-    assert.deepEqual(missingEnvVariables(source), []);
+  it('gives every optional name a fallback or says why it may be unset', () => {
+    const silent = Object.entries(ENV_MANIFEST)
+      .filter(([, entry]) => entry.fallback === undefined && !/Unset/.test(entry.doc))
+      .map(([name]) => name);
+    assert.deepEqual(silent, []);
   });
 
   it('coerces by declared kind and falls back when absent', () => {
@@ -57,15 +55,6 @@ describe('env manifest', () => {
   it('is mirrored by .env.example', () => {
     assert.deepEqual(
       NAMES.filter(name => !exampleNames.includes(name)),
-      []
-    );
-  });
-
-  // Anywhere in the file, not only the `env:` block: API_IMAGE is written by
-  // the deploy step itself, because only that step knows the image tag.
-  it('is mirrored by the release workflow', () => {
-    assert.deepEqual(
-      NAMES.filter(name => !new RegExp(`\\b${name}\\b`).test(releaseWorkflow)),
       []
     );
   });

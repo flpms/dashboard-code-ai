@@ -1,24 +1,54 @@
 'use strict';
 
-const maskCredentials = url => String(url).replace(/\/\/([^:]+):([^@]+)@/, '//$1:****@');
+/**
+ * Opens the SQLite file and brings its schema up to date.
+ *
+ * SQLite instead of a server database because the collector runs on the
+ * developer's laptop: `npx` and it works, no container to start first. The
+ * events table is append-only — a session is a log, and the dashboard is a
+ * projection of it — so the one write path is an INSERT.
+ */
 
-export const DBStartup = async ({ env, logger, MongoClient }) => {
-  const { databaseURL } = env.db;
+const SCHEMA = Object.freeze([
+  `CREATE TABLE IF NOT EXISTS events (
+    seq INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL,
+    ts TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    agent_id TEXT NOT NULL,
+    agent_type TEXT,
+    parent_agent_id TEXT,
+    span_id TEXT,
+    name TEXT,
+    category TEXT,
+    status TEXT,
+    data TEXT NOT NULL DEFAULT '{}'
+  )`,
+  'CREATE INDEX IF NOT EXISTS events_session ON events (session_id, seq)',
+  `CREATE TABLE IF NOT EXISTS sessions (
+    id TEXT PRIMARY KEY,
+    cwd TEXT,
+    started_at TEXT NOT NULL,
+    last_event_at TEXT NOT NULL,
+    ended_at TEXT,
+    event_count INTEGER NOT NULL DEFAULT 0
+  )`,
+]);
 
-  logger.verbose(`Connecting to database: ${maskCredentials(databaseURL)}`);
+const IN_MEMORY = ':memory:';
 
-  const client = new MongoClient(databaseURL, {
-    // A request that waits forever on a dead primary looks like a hung app.
-    // Failing in 10s turns it into a 503 the health check can see.
-    serverSelectionTimeoutMS: 10_000,
-  });
+export const DBStartup = ({ env, logger, DatabaseSync, mkdirSync, dirname }) => {
+  const { path } = env.db;
 
-  await client.connect();
+  if (path !== IN_MEMORY) mkdirSync(dirname(path), { recursive: true });
 
-  const db = client.db();
+  const db = new DatabaseSync(path);
 
-  await db.command({ ping: 1 });
-  logger.info('Database connection established');
+  // WAL lets the dashboard read while a burst of hooks writes.
+  db.exec('PRAGMA journal_mode = WAL');
+  SCHEMA.forEach(statement => db.exec(statement));
 
-  return { db, dbClient: client };
+  logger.info(`Database ready at ${path}`);
+
+  return { db };
 };

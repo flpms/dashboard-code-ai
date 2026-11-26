@@ -1,16 +1,13 @@
 'use strict';
 
-import { HistoryRepository } from './history.repository.js';
-import { ItemsRepository } from './items.repository.js';
-import { UsersRepository } from './users.repository.js';
+import { EventsRepository } from './events.repository.js';
+import { SessionsRepository } from './sessions.repository.js';
 
-export const Repositories = ({ db, env, Logger: logger }) => {
-  const { collections } = env.db;
-  const deps = { db, collections, logger };
+export const Repositories = ({ db, Logger: logger }) => {
+  const deps = { db, logger };
 
   return {
-    historyRepository: HistoryRepository(deps),
-    itemsRepository: ItemsRepository(deps),
-    usersRepository: UsersRepository(deps),
+    eventsRepository: EventsRepository(deps),
+    sessionsRepository: SessionsRepository(deps),
   };
 };

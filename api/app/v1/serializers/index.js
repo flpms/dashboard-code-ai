@@ -1,8 +1,15 @@
 'use strict';
 
-import { serializeItem, serializeItemList } from './item.serializer.js';
+import {
+  serializeEvent,
+  serializeEventList,
+  serializeSession,
+  serializeSessionList,
+} from './event.serializer.js';
 
 export const Serializers = Object.freeze({
-  serializeItem,
-  serializeItemList,
+  serializeEvent,
+  serializeEventList,
+  serializeSession,
+  serializeSessionList,
 });

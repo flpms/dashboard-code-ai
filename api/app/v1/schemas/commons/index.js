@@ -1,27 +1,18 @@
 'use strict';
 
 /**
- * Fragments shared by more than one schema. Keeping them here is what stops
- * "the id is a 24-char hex string" from being re-stated — and re-stated
- * slightly differently — in eight files.
+ * Fragments shared by more than one schema, so "what a session id looks like"
+ * is stated once.
  */
 
-export const objectId = Joi => Joi.string().hex().length(24);
+// Claude Code session ids are UUIDs; other tools may send their own format, so
+// the rule is a safe character set rather than a UUID check.
+export const sessionId = Joi =>
+  Joi.string()
+    .pattern(/^[\w.:-]+$/)
+    .max(200);
 
-export const tenantParams = Joi =>
+export const sessionParams = Joi =>
   Joi.object({
-    tenantId: objectId(Joi).required(),
-  });
-
-export const tenantResourceParams = Joi =>
-  Joi.object({
-    tenantId: objectId(Joi).required(),
-    id: objectId(Joi).required(),
-  });
-
-export const pagination = Joi =>
-  Joi.object({
-    page: Joi.number().integer().min(1).default(1),
-    itemsPerPage: Joi.number().integer().min(1).max(100).default(20),
-    search: Joi.string().trim().allow('').max(120),
+    sessionId: sessionId(Joi).required(),
   });
