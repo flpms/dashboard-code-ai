@@ -1,41 +1,63 @@
 /**
- * Presentation helpers. Pure functions in, strings out — no dates formatted
+ * Presentation helpers. Pure functions in, strings out — nothing is formatted
  * inside a template, so every screen renders the same way and one test covers
  * all of them.
  */
 
 const dateFormatter = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+const clockFormatter = new Intl.DateTimeFormat('pt-BR', { timeStyle: 'medium' });
+const decimal = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 });
 
 /**
- * @param {string|Date|null|undefined} value
+ * @param {string|Date|number|null|undefined} value
  * @returns {string}
  */
 export const formatDateTime = value => (value ? dateFormatter.format(new Date(value)) : '—');
 
-// Label lookups beat if-ladders: adding a status is one line, and an unknown
-// value degrades to itself instead of rendering blank.
-/** @type {Record<string, string>} */
-const STATUS_LABELS = {
-  draft: 'Rascunho',
-  active: 'Ativo',
-  archived: 'Arquivado',
-};
+/**
+ * @param {string|Date|number|null|undefined} value
+ * @returns {string}
+ */
+export const formatClock = value =>
+  value === null || value === undefined ? '—' : clockFormatter.format(new Date(value));
 
-/** @type {Record<string, string>} */
-const STATUS_CLASSES = {
-  draft: 'bg-slate-100 text-slate-700',
-  active: 'bg-emerald-100 text-emerald-800',
-  archived: 'bg-amber-100 text-amber-800',
+// Each unit is a row: the first whose limit the value is under wins.
+const DURATION_UNITS = Object.freeze([
+  { below: 1_000, render: (/** @type {number} */ ms) => `${Math.round(ms)} ms` },
+  { below: 60_000, render: (/** @type {number} */ ms) => `${decimal.format(ms / 1000)} s` },
+  {
+    below: Infinity,
+    render: (/** @type {number} */ ms) =>
+      `${Math.floor(ms / 60_000)} min ${String(Math.round((ms % 60_000) / 1000)).padStart(2, '0')} s`,
+  },
+]);
+
+/**
+ * @param {number|null|undefined} ms
+ * @returns {string}
+ */
+export const formatDuration = ms => {
+  if (ms === null || ms === undefined || Number.isNaN(ms)) return '—';
+  const unit = DURATION_UNITS.find(({ below }) => ms < below) ?? DURATION_UNITS[2];
+  return unit.render(Math.max(0, ms));
 };
 
 /**
- * @param {string} status
+ * A path as a reviewer reads it: relative to the session folder when inside it.
+ *
+ * @param {string} path
+ * @param {string|null} [cwd]
  * @returns {string}
  */
-export const statusLabel = status => STATUS_LABELS[status] ?? status;
+export const shortPath = (path, cwd) => {
+  if (!cwd || !path.startsWith(`${cwd}/`)) return path;
+  return path.slice(cwd.length + 1);
+};
 
 /**
- * @param {string} status
+ * The last folder of a path, for naming a session by where it runs.
+ *
+ * @param {string|null|undefined} path
  * @returns {string}
  */
-export const statusClass = status => STATUS_CLASSES[status] ?? STATUS_CLASSES.draft;
+export const baseName = path => (path ? (path.split(/[\\/]/).filter(Boolean).at(-1) ?? path) : '—');

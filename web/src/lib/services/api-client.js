@@ -66,13 +66,19 @@ const parseBody = async response => {
 };
 
 /**
- * @param {Object} options
- * @param {() => string|null} options.getToken            reads the current access token
+ * @param {Object} [options]
+ * @param {() => string|null} [options.getToken]          reads the current access token, if any
  * @param {() => void} [options.onUnauthorized]           called on any 401
  * @param {typeof fetch} [options.fetchImpl]              injected in tests
+ * @param {typeof EventSource} [options.EventSourceImpl]  injected in tests
  * @returns {HttpClient}
  */
-export const ApiClient = ({ getToken, onUnauthorized, fetchImpl = fetch }) => {
+export const ApiClient = ({
+  getToken = () => null,
+  onUnauthorized,
+  fetchImpl = fetch,
+  EventSourceImpl = globalThis.EventSource,
+} = {}) => {
   /**
    * @param {string} path
    * @param {RequestOptions} [options]
@@ -102,8 +108,34 @@ export const ApiClient = ({ getToken, onUnauthorized, fetchImpl = fetch }) => {
     return payload;
   };
 
+  /**
+   * Server-Sent Events. The browser reconnects on its own after a drop; the
+   * caller hears about it through `onstatus` so it can show "offline" and
+   * reload what it missed when the stream comes back.
+   *
+   * @param {string} path
+   * @param {import('$lib/types.js').StreamHandlers} handlers
+   * @returns {() => void} closes the stream
+   */
+  const subscribe = (path, { onmessage, onstatus }) => {
+    const source = new EventSourceImpl(`${PUBLIC_API_URL}${path}`);
+
+    source.onopen = () => onstatus?.('open');
+    source.onerror = () => onstatus?.('error');
+    source.onmessage = message => {
+      try {
+        onmessage(JSON.parse(message.data));
+      } catch (error) {
+        console.error('[ApiClient.subscribe] dropped a malformed message', error);
+      }
+    };
+
+    return () => source.close();
+  };
+
   return {
     request,
+    subscribe,
     get: (path, options) => request(path, { ...options, method: 'GET' }),
     post: (path, body, options) => request(path, { ...options, method: 'POST', body }),
     patch: (path, body, options) => request(path, { ...options, method: 'PATCH', body }),

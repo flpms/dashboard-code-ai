@@ -17,7 +17,8 @@
     "format": "prettier --write .",
     "audit:prod": "npm audit --omit=dev --audit-level=high",
     "hooks:install": "node scripts/hooks.js install",
-    "hooks:uninstall": "node scripts/hooks.js uninstall"
+    "hooks:uninstall": "node scripts/hooks.js uninstall",
+    "demo": "node scripts/demo-session.js"
   },
   "dependencies": {
     "@fastify/cors": "^11.3.0",

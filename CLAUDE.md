@@ -1,6 +1,7 @@
 # Working in this repository
 
-Two deployables: `api/` (Fastify 5 + MongoDB) and `web/` (SvelteKit 2 + Svelte 5
+Two apps: `api/` — the local collector (Fastify 5 + SQLite via `node:sqlite`) that
+receives Claude Code hooks — and `web/` — the dashboard (SvelteKit 2 + Svelte 5
 runes). Read [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) before changing
 structure.
 
@@ -14,7 +15,6 @@ suggestions.
 | Writing or reviewing any JS/Svelte here | `code-style` |
 | Adding an API endpoint or collection | `api-resource` |
 | Adding a screen, form or listing | `web-feature` |
-| Deploying, rolling back, debugging a release | `deploy-runbook` |
 | Reviewing a diff before merge | `architecture-review` |
 
 ## Non-negotiables
@@ -25,13 +25,17 @@ suggestions.
 - `process.env` is read in `api/app/config/env.config.js` and nowhere else.
 - No `fetch` outside `web/src/lib/services/api-client.js`.
 - Services never import stores or other services.
-- **Every route with `:tenantId` declares `tenant: true`.** Omitting it lets a
-  valid token from one tenant read another's data with a clean 200.
+- **Every route declares `local: true`.** The collector receives every command
+  and path an agent touches; only this machine may read or write it.
+- Hook payloads are untrusted input: declare the fields you read in
+  `collector.schema.js`, everything else is stripped.
 - New environment variables go in `api/app/config/env.manifest.js`.
 - A route that reads input is `validate: true`; controllers read `request.body`,
   which Fastify has already replaced with the validated, stripped value.
 - A guard that refuses **returns the reply** (`return reply.code(403).send(…)`);
   otherwise the next hook runs.
+- The dashboard draws only what `buildSessionModel(events)` derives; never keep a
+  second copy of session state in a component.
 - Branches are `<type>-<short-description>` (`feat-`, `fix-`, `ci-`, `docs-`,
   `refactor-`), no slashes.
 

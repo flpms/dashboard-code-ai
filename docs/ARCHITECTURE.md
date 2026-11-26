@@ -1,18 +1,14 @@
 # Architecture
 
-Two deployables in one repository: a Node/Fastify REST API and a SvelteKit
-single-page app. They share no code and no build — only a contract, and the
-conventions in this document.
+Two apps in one repository: a local collector (Node/Fastify on SQLite) that
+receives Claude Code hooks, Docker events and file changes, and a SvelteKit
+dashboard that draws them live. They share no code and no build — only a
+contract, and the conventions in this document.
 
 ```
-┌──────────────────────────┐         HTTPS + Bearer JWT        ┌──────────────────────────┐
-│  web/  SvelteKit SPA     │ ────────────────────────────────► │  api/  Fastify REST      │
-│  static files            │                                    │  Docker container        │
-└──────────────────────────┘                                    └────────────┬─────────────┘
-                                                                             │
-                                                              ┌──────────────┴──────────────┐
-                                                              │  MongoDB       S3 storage   │
-                                                              └─────────────────────────────┘
+Claude Code ── HTTP hooks ──┐
+docker events ──────────────┼──► api/  collector ── SSE + REST ──► web/  dashboard
+file watcher ───────────────┘          SQLite (append-only log)
 ```
 
 Details per side: [`api/ARCHITECTURE.md`](../api/ARCHITECTURE.md),
@@ -25,7 +21,7 @@ Details per side: [`api/ARCHITECTURE.md`](../api/ARCHITECTURE.md),
 ### 1. Layers, with a one-way dependency rule
 
 Each layer knows only the one beneath it. The rule is not aesthetic: it is what
-makes a change local. Swapping Mongo for Postgres touches repositories. Swapping
+makes a change local. Swapping Mongo for SQLite touched repositories only. Swapping
 REST for GraphQL touches controllers. Neither touches the rules in between.
 
 ```
@@ -56,15 +52,16 @@ row; the control flow never grows.
 
 See the [`code-style`](../.claude/skills/code-style/SKILL.md) skill.
 
-### 4. Multi-tenancy is enforced, not assumed
+### 4. Local by construction
 
-Every tenant-scoped path carries `:tenantId`, and **two** guards run:
-`permission` proves the role, `tenant-scope` proves the caller belongs to that
-tenant. Role alone is not enough — without the second check an `admin` of tenant
-A reads tenant B by editing the URL.
+The collector sees every command, path and output an agent produces. It binds to
+`127.0.0.1`, and every route carries `local: true`, which refuses any caller that
+is not loopback even if someone binds it to `0.0.0.0`
+([ADR 0008](adr/0008-local-collector-with-sqlite.md)).
 
-Repositories then scope every read by `tenantId` and `deleted: false`, so a
-forgotten filter is a visible diff rather than a silent leak.
+The event log is append-only. The dashboard never stores session state of its
+own: it re-derives what it draws from the log, so a reconnect is "fetch what I
+missed", never "reconcile two copies".
 
 ### 5. Fail at boot, not at the first request
 
@@ -167,4 +164,5 @@ Recorded as ADRs in [`docs/adr/`](adr/). The short list:
 | [0004](adr/0004-environment-manifest.md) | One environment manifest | Removes the class of bug where a deploy forgets a variable the code reads. |
 | [0005](adr/0005-javascript-with-jsdoc-types.md) | JSDoc types, not TypeScript | Type checking without a build step, at a level the team will actually keep green. |
 | [0006](adr/0006-separate-api-deployable.md) | API as a separate deployable | The framework owns `main()` in a SvelteKit/Next backend, so there is no composition root and route policy stops being data. Includes the full trade-off tables for all three models. |
+| [0008](adr/0008-local-collector-with-sqlite.md) | Local collector on SQLite | The data is one developer's own sessions; setup must be one command. Auth, tenancy and the server deploy are gone. |
 | [0007](adr/0007-fastify-over-express.md) | Fastify, not Express | The request lifecycle enforces the guard → validation order, validation strips input before the handler, and the error handler has no arity trap. |
