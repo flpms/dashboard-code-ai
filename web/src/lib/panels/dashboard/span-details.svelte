@@ -1,4 +1,5 @@
 <script>
+  import Tile from '$lib/components/ui/tile.svelte';
   import { categoryStyle } from '$lib/utils/categories.js';
   import { formatClock, formatDuration } from '$lib/utils/format.js';
 
@@ -10,63 +11,57 @@
    */
   let { span, agentLabel = '', nowMs } = $props();
 
-  const STATUS_LABELS = { running: 'rodando', ok: 'concluída', error: 'falhou' };
-  const STATUS_CLASSES = {
+  const STATUS_LABELS = Object.freeze({ running: 'rodando', ok: 'concluída', error: 'falhou' });
+  const STATUS_CLASSES = Object.freeze({
     running: 'text-sky-300',
     ok: 'text-emerald-300',
     error: 'text-red-300',
-  };
+  });
 </script>
 
-<section
-  class="min-w-0 rounded-lg border border-slate-800 bg-slate-900 p-4"
-  aria-label="Detalhes da chamada"
->
-  <h2 class="mb-3 text-xs font-medium tracking-wide text-slate-400 uppercase">
-    Detalhes da chamada
-  </h2>
-
+<Tile label="Detalhes da chamada" heading="top">
   {#if !span}
-    <p class="text-sm text-slate-500">
+    <p class="text-sm font-light text-white/60">
       Clique em um bloco da timeline para ver o que a chamada fez.
     </p>
   {/if}
 
   {#if span}
-    <div class="flex flex-col gap-3 text-sm">
-      <div class="flex flex-wrap items-center gap-2">
-        <span class={`h-3 w-3 rounded-sm ${categoryStyle(span.category).swatch}`} aria-hidden="true"
-        ></span>
-        <span class="font-semibold text-slate-100">{span.name}</span>
-        <span class="text-slate-400">{categoryStyle(span.category).label}</span>
-        <span class={STATUS_CLASSES[span.status]}>{STATUS_LABELS[span.status]}</span>
-      </div>
+    <div class="flex min-w-0 flex-col gap-3 text-[13px] font-light">
+      <p class="flex flex-wrap items-baseline gap-x-3">
+        <span class="font-display text-[40px] leading-none font-extralight">{span.name}</span>
+        <span class={`text-sm ${STATUS_CLASSES[span.status]}`}>{STATUS_LABELS[span.status]}</span>
+      </p>
 
-      <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-xs">
-        <dt class="text-slate-500">Agente</dt>
-        <dd class="text-slate-300">{agentLabel || span.agentId}</dd>
-        <dt class="text-slate-500">Início</dt>
-        <dd class="text-slate-300 tabular-nums">{formatClock(span.startMs)}</dd>
-        <dt class="text-slate-500">Duração</dt>
-        <dd class="text-slate-300 tabular-nums">
-          {formatDuration((span.endMs ?? nowMs) - span.startMs)}
+      <dl class="grid grid-cols-[5.5rem_1fr] gap-y-1">
+        <dt class="text-white/55">Tipo</dt>
+        <dd class="flex items-center gap-2">
+          <span class={`h-2.5 w-2.5 ${categoryStyle(span.category).swatch}`} aria-hidden="true"
+          ></span>
+          {categoryStyle(span.category).label}
         </dd>
-        <dt class="text-slate-500">Resumo</dt>
-        <dd class="break-all text-slate-300">{span.summary || '—'}</dd>
+        <dt class="text-white/55">Agente</dt>
+        <dd>{agentLabel || span.agentId}</dd>
+        <dt class="text-white/55">Início</dt>
+        <dd class="tabular-nums">{formatClock(span.startMs)}</dd>
+        <dt class="text-white/55">Duração</dt>
+        <dd class="tabular-nums">{formatDuration((span.endMs ?? nowMs) - span.startMs)}</dd>
+        <dt class="text-white/55">Resumo</dt>
+        <dd class="break-all">{span.summary || '—'}</dd>
       </dl>
 
       <div>
-        <h3 class="mb-1 text-xs text-slate-500">Entrada</h3>
+        <h3 class="mb-1 text-xs text-white/55 lowercase">Entrada</h3>
         <pre
-          class="max-h-40 overflow-auto rounded bg-slate-950 p-2 text-xs whitespace-pre-wrap text-slate-300">{span.input ||
+          class="max-h-40 overflow-auto bg-black/35 px-3 py-2.5 font-mono text-xs whitespace-pre-wrap">{span.input ||
             '—'}</pre>
       </div>
       <div>
-        <h3 class="mb-1 text-xs text-slate-500">Saída</h3>
+        <h3 class="mb-1 text-xs text-white/55 lowercase">Saída</h3>
         <pre
-          class="max-h-60 overflow-auto rounded bg-slate-950 p-2 text-xs whitespace-pre-wrap text-slate-300">{span.output ||
+          class="max-h-60 overflow-auto bg-black/35 px-3 py-2.5 font-mono text-xs whitespace-pre-wrap">{span.output ||
             '—'}</pre>
       </div>
     </div>
   {/if}
-</section>
+</Tile>

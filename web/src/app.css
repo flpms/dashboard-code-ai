@@ -1,11 +1,55 @@
 @import 'tailwindcss';
 
-/* Tailwind 4 keeps design tokens in CSS, not in a JS config. A token added here
-   is available as a utility (`bg-brand`, `text-brand`) with no build step of
-   its own. */
+/* Live tiles: the dashboard's design system.
+
+   Tailwind 4 keeps design tokens in CSS, not in a JS config. A token added here
+   is available as a utility (`bg-tile-tests`, `font-display`) with no build
+   step of its own.
+
+   Three rules hold the look together:
+   - Tiles are square-cornered panes of tinted glass laid on a dark field lit by
+     a few soft colour washes. The tint says which instrument it is.
+   - Readings are big and thin (`font-display` at weight 100–200); labels are
+     small, lowercase and sit at the bottom of the tile.
+   - A tile changes tint only to raise a signal (failing tests, a high CVE), so
+     colour that moves always means "look here". */
 @theme {
-  --color-brand-50: oklch(0.97 0.02 250);
-  --color-brand-500: oklch(0.62 0.17 250);
-  --color-brand-600: oklch(0.55 0.17 250);
-  --color-brand-700: oklch(0.48 0.16 250);
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Inter Display', 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', monospace;
+
+  /* The field the glass sits on. */
+  --color-field: oklch(0.16 0.025 275);
+
+  /* One tint per instrument, plus the signal tints a tile switches to. */
+  --color-tile-tests: oklch(0.6 0.15 155);
+  --color-tile-agents: oklch(0.52 0.2 310);
+  --color-tile-containers: oklch(0.55 0.11 220);
+  --color-tile-alerts: oklch(0.68 0.15 75);
+  --color-tile-files: oklch(0.62 0.13 85);
+  --color-tile-resources: oklch(0.47 0.18 280);
+  --color-tile-security: oklch(0.55 0.2 27);
+  --color-tile-neutral: oklch(0.26 0.03 275);
+  --color-tile-critical: oklch(0.55 0.2 27);
+  --color-tile-warning: oklch(0.68 0.15 75);
+}
+
+/* The glass itself. A tile sets `--tile` to one of the tints above. */
+@utility glass-tile {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background: color-mix(in oklab, var(--tile, var(--color-tile-neutral)) 62%, transparent);
+  border-top: 1px solid rgb(255 255 255 / 0.22);
+  backdrop-filter: blur(24px) saturate(1.4);
+  transition: background-color 400ms ease;
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background: linear-gradient(160deg, rgb(255 255 255 / 0.13), transparent 45%);
+  }
 }
