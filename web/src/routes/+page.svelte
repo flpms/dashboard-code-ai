@@ -7,7 +7,6 @@
   import { ApiClient } from '$services/api-client.js';
   import { SessionsService } from '$services/sessions.service.js';
   import { buildSessionModel } from '$lib/utils/session-model.js';
-  import { baseName } from '$lib/utils/format.js';
 
   /**
    * The dashboard. The page is the only layer that knows about all the others:
@@ -23,11 +22,11 @@
   /** Anything thrown can be anything. Narrow once, here. @param {unknown} error */
   const reasonFor = error => (error instanceof Error ? error.message : 'Erro inesperado.');
 
-  const STREAM_LABELS = {
-    connecting: { text: 'conectando…', dot: 'bg-slate-500' },
-    open: { text: 'ao vivo', dot: 'bg-emerald-400' },
+  const STREAM_LABELS = Object.freeze({
+    connecting: { text: 'conectando…', dot: 'bg-white/40' },
+    open: { text: 'coletor conectado', dot: 'bg-emerald-400' },
     error: { text: 'coletor offline', dot: 'bg-red-500' },
-  };
+  });
 
   /** @type {SessionSummary[]} */
   let sessions = $state([]);
@@ -160,60 +159,58 @@
   });
 </script>
 
-<div class="grid min-h-[calc(100vh-3rem)] grid-cols-1 lg:grid-cols-[260px_minmax(0,1fr)]">
-  <aside class="border-b border-slate-800 bg-slate-950 p-3 lg:border-r lg:border-b-0">
-    <div class="mb-3 flex items-center gap-2 px-2 text-xs text-slate-400" role="status">
-      <span class={`h-2 w-2 rounded-full ${STREAM_LABELS[streamStatus].dot}`} aria-hidden="true"
-      ></span>
-      {STREAM_LABELS[streamStatus].text}
-    </div>
-
+<div class="flex flex-col gap-4 px-4 pt-2 pb-8 md:px-10">
+  <div class="flex flex-wrap items-end gap-x-8 gap-y-3">
     {#if loadingSessions}
-      <p class="px-2 text-sm text-slate-500">Carregando sessões…</p>
+      <p class="font-display text-[28px] font-extralight text-white/50">carregando sessões…</p>
     {/if}
 
     {#if !loadingSessions}
       <SessionsList {sessions} {selectedId} {nowMs} onselect={selectSession} />
     {/if}
-  </aside>
 
-  <section class="flex min-w-0 flex-col gap-4 p-4">
-    {#if failure}
-      <p
-        role="alert"
-        class="rounded-md border border-red-900 bg-red-950 px-4 py-3 text-sm text-red-200"
-      >
-        {failure}
-      </p>
-    {/if}
+    <div
+      class="ml-auto flex max-w-full min-w-0 flex-col items-end gap-0.5 pb-1 text-[13px] font-light text-white/65"
+    >
+      <span class="flex items-center gap-2" role="status">
+        <span class={`h-2 w-2 ${STREAM_LABELS[streamStatus].dot}`} aria-hidden="true"></span>
+        {STREAM_LABELS[streamStatus].text}
+      </span>
+      {#if selected}
+        <span
+          class="max-w-full truncate font-mono text-[11px] text-white/45 md:max-w-[28rem]"
+          title={selected.id}
+        >
+          {selected.cwd ?? ''} · {selected.eventCount} eventos{loadingEvents
+            ? ' · carregando…'
+            : ''}
+        </span>
+      {/if}
+    </div>
+  </div>
 
-    {#if selected}
-      <div class="flex flex-wrap items-baseline gap-x-3">
-        <h1 class="text-lg font-semibold text-slate-100">{baseName(selected.cwd)}</h1>
-        <span class="truncate text-xs text-slate-500">{selected.cwd ?? ''} · {selected.id}</span>
-        {#if loadingEvents}
-          <span class="text-xs text-slate-500">carregando eventos…</span>
-        {/if}
-      </div>
+  {#if failure}
+    <p role="alert" class="glass-tile px-4 py-3 text-sm [--tile:var(--color-tile-critical)]">
+      {failure}
+    </p>
+  {/if}
 
-      <InstrumentsBar {model} cwd={selected.cwd} />
+  {#if selected}
+    <InstrumentsBar {model} cwd={selected.cwd} />
 
-      <div class="grid grid-cols-1 gap-4 2xl:grid-cols-[minmax(0,1fr)_380px]">
-        <AgentTimeline {model} {nowMs} selectedId={selectedSpanId} onselect={selectSpan} />
-        <SpanDetails
-          span={selectedSpan}
-          agentLabel={selectedSpan ? (agentsById.get(selectedSpan.agentId)?.type ?? '') : ''}
-          {nowMs}
-        />
-      </div>
-    {/if}
+    <div class="grid grid-cols-1 gap-2 xl:grid-cols-[minmax(0,7fr)_minmax(0,3fr)]">
+      <AgentTimeline {model} {nowMs} selectedId={selectedSpanId} onselect={selectSpan} />
+      <SpanDetails
+        span={selectedSpan}
+        agentLabel={selectedSpan ? (agentsById.get(selectedSpan.agentId)?.type ?? '') : ''}
+        {nowMs}
+      />
+    </div>
+  {/if}
 
-    {#if !selected && !loadingSessions && !failure}
-      <div
-        class="rounded-lg border border-dashed border-slate-700 p-12 text-center text-sm text-slate-400"
-      >
-        Nenhuma sessão registrada. Instale os hooks e abra uma sessão do Claude Code.
-      </div>
-    {/if}
-  </section>
+  {#if !selected && !loadingSessions && !failure}
+    <div class="glass-tile p-12 text-center text-sm font-light text-white/70">
+      Nenhuma sessão registrada. Instale os hooks e abra uma sessão do Claude Code.
+    </div>
+  {/if}
 </div>
