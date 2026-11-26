@@ -24,10 +24,11 @@ should not?
 | Layer | May know about | Must never |
 | --- | --- | --- |
 | `routes.json` | route names, flags | contain logic |
-| Controller | `request`, `reply`, use cases | business rules, Mongo |
+| Controller | `request`, `reply`, use cases | business rules, SQL |
 | Use case | repositories, services, serializers | `request`, `reply`, HTTP status codes |
-| Repository | one collection | business rules, HTTP |
-| Service | one external system | domain rules |
+| Repository | one table, prepared statements | business rules, HTTP, SQL built from strings |
+| Domain (`v1/domain/`) | its input | I/O, dependencies, the clock |
+| Service | one outside source (`spawn`, watcher) | domain rules |
 | Schema | Joi only | anything from the app |
 
 **Web**
@@ -48,25 +49,29 @@ into a four-file archaeology exercise a year later.
 
 These are the ones that fail quietly, so check them explicitly.
 
-- [ ] **Every route with `:tenantId` has `tenant: true`.** Without it, a valid
-      token from tenant A reads tenant B — role passes, query is scoped to the
-      URL, response is a clean 200.
+- [ ] **Every route has `local: true`.** The collector holds every command,
+      path and prompt an agent touched; a route without the guard hands that
+      history to anyone on the network once `HOST` is not loopback.
       ```bash
-      node -e "const r=require('./api/app/v1/routes.json');Object.entries(r).filter(([,v])=>v.path.includes(':tenantId')&&!v.tenant).forEach(([k])=>console.log('MISSING tenant:true ->',k))"
+      node -e "const r=require('./api/app/v1/routes.json');Object.entries(r).filter(([,v])=>!v.local).forEach(([k])=>console.log('MISSING local:true ->',k))"
       ```
-- [ ] **`roles` is the narrowest set that works.** Not the set that was easiest
-      to paste.
+- [ ] **Hook fields are declared before they are read.** A field the normalizer
+      uses but `collector.schema.js` does not declare is silently stripped; a
+      declared string without `.max()` is an unbounded write to disk.
 - [ ] **Every route that reads input is `validate: true`.** Validation is what
       strips undeclared fields; without it `request.body` is the raw payload.
 - [ ] **A guard that refuses returns the reply.** Without the `return`, Fastify
       runs the next hook.
-- [ ] **Repository reads are scoped by `tenantId` and `deleted: false`.**
+- [ ] **Every SQL value is bound with `?`.** Paths and commands come from the
+      agent; one interpolated into SQL is an injection.
+- [ ] **A spawned process gets an argument array, never a shell string**, and
+      a timeout. Its output is parsed in `v1/domain/`, not trusted as-is.
+- [ ] **A link built from collected data is `https:` only** (`safeLink` in
+      `web/`); an advisory URL or a path is not a safe `href`.
 - [ ] **The response goes through a serializer.** Returning a raw document ships
       whatever field was added last.
 - [ ] **No 5xx body carries a message from an exception.** Detail goes to the log.
 - [ ] **No secret has a `PUBLIC_` prefix**, and no secret is logged.
-- [ ] **Auth refusals are indistinguishable** — unknown user and wrong password
-      answer the same thing, or the endpoint is a user-enumeration tool.
 - [ ] **New environment variables are in the manifest**, not read ad hoc from
       `process.env`.
 
@@ -97,8 +102,10 @@ By eye:
 
 - [ ] Each new use case has a test for the happy path, **each refusal**, and a
       repository that throws.
-- [ ] A new tenant-scoped route has an integration case proving the cross-tenant
-      403. One tenant in every test is how this class of bug survives a green suite.
+- [ ] A new route has an integration case proving the 403 for a caller that is
+      not this machine.
+- [ ] New parsing in `v1/domain/` is tested against a real sample of the tool's
+      output, kept in `api/tests/fixtures/`.
 - [ ] A new component has a test for its empty state and one interaction.
 - [ ] No test asserts on a log line or a private helper.
 
@@ -106,8 +113,8 @@ By eye:
 
 ## Step 5 — The reviewer's questions
 
-1. If this breaks in production at 03:00, what does the log say, and is it enough?
-2. What happens on the second call? On a slow database? On a 500 from the API?
+1. If this breaks in the middle of someone's session, what does the log say, and is it enough?
+2. What happens on the second call? On a burst of hooks? With the collector down (hooks must fail silently)?
 3. Which of these branches would a table replace?
 4. Is anything here duplicated from a file three directories away?
 5. Does anything new read `process.env`, a store, or a module-level singleton?
