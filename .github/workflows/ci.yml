@@ -22,6 +22,29 @@ permissions:
   contents: read
 
 jobs:
+  # The oldest Node the README promises. CI otherwise runs the newest patch of
+  # each line, which hides a dependency that dropped an older 24.x (jsdom 30
+  # needs 24.15+); --engine-strict turns that EBADENGINE warning into a failure.
+  engines:
+    name: Engines (Node ${{ matrix.node-version }}, ${{ matrix.workspace }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: ['24.0.0']
+        workspace: [api, web]
+    defaults:
+      run:
+        working-directory: ${{ matrix.workspace }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - run: npm ci --engine-strict --ignore-scripts
+
   api:
     name: API
     runs-on: ubuntu-latest
