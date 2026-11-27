@@ -16,6 +16,7 @@ How to write an entry is in [CONTRIBUTING.md](CONTRIBUTING.md#changelog).
 - `CHANGELOG.md`, `CONTRIBUTING.md` and a troubleshooting guide for hooks in
   the README. Every pull request now updates the changelog and the docs it
   affects, and CI checks the changelog.
+  ([#28](https://github.com/flpms/dashboard-code-ai/pull/28))
 - Sessions show up without any manual step. At boot the collector adds its
   HTTP hooks to `~/.claude/settings.json` when they are missing, keeping the
   rest of the file and a one-off `settings.json.bak`; `AUTO_INSTALL_HOOKS=false`
@@ -65,6 +66,7 @@ How to write an entry is in [CONTRIBUTING.md](CONTRIBUTING.md#changelog).
 - `docs/ARCHITECTURE.md`, `web/ARCHITECTURE.md`, `docs/TESTING.md` and the pull
   request template describe the collector and dashboard instead of the
   template's auth, tenants and items.
+  ([#28](https://github.com/flpms/dashboard-code-ai/pull/28))
 - The agent timeline takes the top left of the dashboard with the call details
   beside it; the instrument wall moves below.
   ([#26](https://github.com/flpms/dashboard-code-ai/pull/26))
