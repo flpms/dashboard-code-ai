@@ -201,8 +201,8 @@
          heading for screen readers and for anyone navigating by headings. -->
     <h1 class="sr-only">{baseName(selected.cwd)}</h1>
 
-    <InstrumentsBar {model} cwd={selected.cwd} />
-
+    <!-- The timeline is what a person comes here to read, so it takes the top
+         left, where the eye lands first; the instrument wall sits below it. -->
     <div class="grid grid-cols-1 gap-2 xl:grid-cols-[minmax(0,7fr)_minmax(0,3fr)]">
       <AgentTimeline {model} {nowMs} selectedId={selectedSpanId} onselect={selectSpan} />
       <SpanDetails
@@ -211,6 +211,8 @@
         {nowMs}
       />
     </div>
+
+    <InstrumentsBar {model} cwd={selected.cwd} />
   {/if}
 
   {#if !selected && !loadingSessions && !failure}
