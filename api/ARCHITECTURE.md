@@ -63,6 +63,11 @@ a capability is a key in that table, not an `if`. It throws at boot, naming the
 route, when a row has no controller, an unknown method, `validate: true` without
 a schema, or a schema without `validate: true`.
 
+Routes that change something on this machine use `PUT`, `PATCH` or `DELETE`
+(`/settings`, `/settings/hooks`): a browser sends those cross-origin only after
+a CORS preflight, which a page from another origin fails, so a web page the
+person happens to open cannot rewrite their Claude Code settings.
+
 **Every route is `local: true`.** The events hold every command, path and
 prompt an agent touched. `HOST` defaults to `127.0.0.1`, and the guard is the
 second wall for the day someone binds to `0.0.0.0`.
@@ -132,8 +137,11 @@ One module per source, and the only place that spawns a process or touches the
 file system: `docker-watcher` (`docker events`), `file-watcher` (chokidar on
 each session's folder), `security-auditor` (`npm audit --json`, coalesced
 per folder), `transcript-watcher` (new lines of Claude Code's
-`~/.claude/projects/**/*.jsonl`) and `hooks-installer` (adds the collector's
-hooks to `~/.claude/settings.json` at boot when missing). Each takes `spawn`,
+`~/.claude/projects/**/*.jsonl`, and rescanned on demand), `hooks-installer`
+(adds the collector's hooks to `~/.claude/settings.json` at boot when missing,
+and installs or removes them from the settings menu) and `settings-store` (the
+settings saved from the menu, in a JSON file beside the database, winning over
+the environment defaults). Each takes `spawn`,
 `watch` or `fs` as an argument, so the tests drive them with fakes, and each
 has an `enabled` flag from the environment.
 
