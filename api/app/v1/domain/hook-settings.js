@@ -29,6 +29,19 @@ export const COLLECTOR_HOOKS = Object.freeze([
 
 export const DEFAULT_COLLECTOR_URL = 'http://127.0.0.1:4317/v1/hooks';
 
+/**
+ * Where Claude Code should post for a collector bound to `host:port`. Hooks
+ * always call loopback: bound to every interface, the collector answers there
+ * too.
+ *
+ * @param {string} host
+ * @param {number} port
+ */
+export const hookUrlFor = (host, port) => {
+  const loopback = ['0.0.0.0', '::'].includes(host) ? '127.0.0.1' : host;
+  return `http://${loopback}:${port}/v1/hooks`;
+};
+
 // Seconds. A hook that cannot reach the collector must never slow the agent
 // down: an unreachable URL is a non-blocking error in Claude Code, and this
 // bounds the wait when the port is open but nobody answers.

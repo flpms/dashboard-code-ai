@@ -28,5 +28,35 @@
     "method": "get",
     "local": true,
     "validate": false
+  },
+  "refreshSessions": {
+    "path": "/sessions/refresh",
+    "method": "post",
+    "local": true,
+    "validate": false
+  },
+  "getSettings": {
+    "path": "/settings",
+    "method": "get",
+    "local": true,
+    "validate": false
+  },
+  "updateSettings": {
+    "path": "/settings",
+    "method": "patch",
+    "local": true,
+    "validate": true
+  },
+  "installHooks": {
+    "path": "/settings/hooks",
+    "method": "put",
+    "local": true,
+    "validate": false
+  },
+  "removeHooks": {
+    "path": "/settings/hooks",
+    "method": "delete",
+    "local": true,
+    "validate": false
   }
 }

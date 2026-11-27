@@ -5,6 +5,7 @@ import {
   COLLECTOR_HOOKS,
   DEFAULT_COLLECTOR_URL,
   hasCollectorHooks,
+  hookUrlFor,
   withCollectorHooks,
   withoutCollectorHooks,
 } from '../../../app/v1/domain/hook-settings.js';
@@ -62,5 +63,13 @@ describe('hasCollectorHooks', () => {
 
     const { PreToolUse: _dropped, ...partial } = installed.hooks;
     assert.equal(hasCollectorHooks({ hooks: partial }, url), false);
+  });
+});
+
+describe('hookUrlFor', () => {
+  it('points at loopback, even when the collector listens everywhere', () => {
+    assert.equal(hookUrlFor('127.0.0.1', 4317), 'http://127.0.0.1:4317/v1/hooks');
+    assert.equal(hookUrlFor('0.0.0.0', 5000), 'http://127.0.0.1:5000/v1/hooks');
+    assert.equal(hookUrlFor('::', 4317), 'http://127.0.0.1:4317/v1/hooks');
   });
 });

@@ -11,6 +11,10 @@
     secondary: 'bg-white text-slate-900 ring-1 ring-slate-300 hover:bg-slate-50',
     ghost: 'bg-transparent text-slate-700 hover:bg-slate-100',
     danger: 'bg-red-600 text-white hover:bg-red-700 focus-visible:outline-red-600',
+    // Live tiles: square panes of glass on the dark field.
+    tile: 'rounded-none bg-white/12 font-light text-white ring-1 ring-white/25 hover:bg-white/22 focus-visible:outline-white',
+    'tile-danger':
+      'rounded-none bg-red-500/25 font-light text-red-50 ring-1 ring-red-300/40 hover:bg-red-500/40 focus-visible:outline-red-300',
   };
 
   /** @type {Record<string, string>} */
@@ -22,7 +26,7 @@
 
   /**
    * @type {{
-   *   variant?: 'primary'|'secondary'|'ghost'|'danger',
+   *   variant?: 'primary'|'secondary'|'ghost'|'danger'|'tile'|'tile-danger',
    *   size?: 'sm'|'md'|'lg',
    *   type?: 'button'|'submit'|'reset',
    *   disabled?: boolean,

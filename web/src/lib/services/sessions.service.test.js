@@ -7,7 +7,8 @@ const fakeClient = () => ({
   get: vi.fn(async path =>
     path.startsWith('/v1/sessions?') ? { sessions: [{ id: 's1' }] } : { events: [], last: 0 }
   ),
-  post: vi.fn(),
+  post: vi.fn(async () => ({ transcripts: 1, read: 1, newSessions: 1 })),
+  put: vi.fn(),
   patch: vi.fn(),
   remove: vi.fn(),
   subscribe: vi.fn(() => () => {}),
@@ -34,5 +35,15 @@ describe('SessionsService', () => {
       onmessage: onevent,
       onstatus: undefined,
     });
+  });
+
+  it('asks the collector to rescan for new sessions', async () => {
+    const client = fakeClient();
+    expect(await SessionsService(client).refresh()).toEqual({
+      transcripts: 1,
+      read: 1,
+      newSessions: 1,
+    });
+    expect(client.post).toHaveBeenCalledWith('/v1/sessions/refresh');
   });
 });

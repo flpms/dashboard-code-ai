@@ -152,10 +152,31 @@
  * @typedef {Object} HttpClient
  * @property {(path: string, options?: RequestOptions) => Promise<any>} request
  * @property {(path: string, options?: RequestOptions) => Promise<any>} get
- * @property {(path: string, body: unknown, options?: RequestOptions) => Promise<any>} post
+ * @property {(path: string, body?: unknown, options?: RequestOptions) => Promise<any>} post
+ * @property {(path: string, body?: unknown, options?: RequestOptions) => Promise<any>} put
  * @property {(path: string, body: unknown, options?: RequestOptions) => Promise<any>} patch
  * @property {(path: string, options?: RequestOptions) => Promise<any>} remove
  * @property {(path: string, handlers: StreamHandlers) => () => void} subscribe
+ */
+
+/**
+ * What the settings menu reads: the two saved settings, the hooks in Claude
+ * Code's settings file, and what comes from the collector's environment.
+ *
+ * @typedef {Object} CollectorSettings
+ * @property {{ autoInstallHooks: boolean, backfillHours: number }} settings
+ * @property {{ installed: boolean, readable: boolean, url: string, settingsPath: string }} hooks
+ * @property {{ version: string, host: string, port: number, claudeHome: string }} collector
+ * @property {{ docker: boolean, files: boolean, security: boolean, transcripts: boolean }} watchers
+ */
+
+/**
+ * What a refresh found in Claude Code's transcripts folder.
+ *
+ * @typedef {Object} RefreshResult
+ * @property {number} transcripts
+ * @property {number} read
+ * @property {number} newSessions
  */
 
 export {};

@@ -33,6 +33,7 @@ const watcher = (options = {}) =>
     root,
     backfillMs: HOUR,
     fs,
+    join,
     Logger: fakeLogger(),
     watch: fakeWatch,
     ...options,
@@ -148,5 +149,68 @@ describe('TranscriptWatcher', () => {
     transcripts.flush();
 
     assert.equal(received.length, 1);
+  });
+});
+
+describe('TranscriptWatcher.rescan', () => {
+  const lines = () => fixture('main.jsonl').trim().split('\n').length;
+
+  // A session counts as known once one of its lines reached the collector.
+  const startTracking = transcripts => {
+    const known = new Set();
+    transcripts.start(
+      line => {
+        received.push(line);
+        known.add(SESSION);
+      },
+      { isKnownSession: id => known.has(id) }
+    );
+  };
+
+  it('picks up a transcript the file watcher never announced', () => {
+    fs.writeFileSync(mainPath(), fixture('main.jsonl'));
+    const transcripts = watcher();
+    startTracking(transcripts);
+    emitter.emit('ready');
+
+    assert.deepEqual(transcripts.rescan(), { transcripts: 1, read: 1, newSessions: 1 });
+    assert.equal(received.length, lines());
+    assert.deepEqual(transcripts.rescan(), { transcripts: 1, read: 0, newSessions: 0 });
+  });
+
+  it('reads lines appended without a change event', () => {
+    fs.writeFileSync(mainPath(), fixture('main.jsonl'));
+    const transcripts = watcher();
+    startTracking(transcripts);
+    emitter.emit('add', mainPath());
+    transcripts.flush();
+
+    fs.appendFileSync(mainPath(), `${JSON.stringify({ type: 'user', sessionId: SESSION })}\n`);
+    assert.equal(transcripts.rescan().read, 1);
+    assert.equal(received.length, lines() + 1);
+  });
+
+  it('goes back for an older session once the window covers it', () => {
+    fs.writeFileSync(mainPath(), fixture('main.jsonl'));
+    const threeHoursAgo = new Date(Date.now() - 3 * HOUR);
+    fs.utimesSync(mainPath(), threeHoursAgo, threeHoursAgo);
+    const transcripts = watcher();
+    startTracking(transcripts);
+    emitter.emit('add', mainPath());
+    transcripts.flush();
+    assert.equal(received.length, 0);
+
+    assert.equal(transcripts.rescan().read, 0);
+    assert.deepEqual(transcripts.rescan({ backfillMs: 4 * HOUR }), {
+      transcripts: 1,
+      read: 1,
+      newSessions: 1,
+    });
+    assert.equal(received.length, lines());
+  });
+
+  it('finds nothing when Claude Code has no projects folder yet', () => {
+    const transcripts = watcher({ root: join(root, 'missing') });
+    assert.deepEqual(transcripts.rescan(), { transcripts: 0, read: 0, newSessions: 0 });
   });
 });

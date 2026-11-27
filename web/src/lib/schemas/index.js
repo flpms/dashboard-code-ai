@@ -1,4 +1,5 @@
 export { eventSchema } from './event.schema.js';
+export { settingsSchema } from './settings.schema.js';
 
 /**
  * Runs a schema and returns either the parsed value or a field → message map.
