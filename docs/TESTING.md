@@ -4,7 +4,7 @@
 npm run verify            # everything, from the repository root
 
 cd api  && npm test                 # unit, with coverage
-        && npm run test:integration # real router over a fake database
+        && npm run test:integration # real server over in-memory SQLite
 cd web  && npm test                 # Vitest
         && npm run test:e2e         # Playwright against the built app
 ```
@@ -18,13 +18,20 @@ no network: every unit already receives its collaborators, so a double is a plai
 object from `tests/helpers/fakes.js`.
 
 ```javascript
+const { collector, published } = buildCollector();
 const { onFinish, last } = captureOutcome();
 
-await build({ items: { findOne: async () => ({ _id: id, name: 'dup' }) } })
-  .createItem({ data: { tenantId, name: 'dup' }, onFinish });
+await collector.ingestHook({ data: hook('SessionStart'), onFinish });
 
-assert.equal(last().name, 'CONFLICT');
+assert.equal(last().name, 'NO_CONTENT');
+assert.equal(published[0].kind, 'session.start');
 ```
+
+Parsing in `v1/domain/` (hook normaliser, transcript lines, `npm audit`, test
+summaries, `docker events`) is tested against real samples of the tool's output
+kept in `tests/fixtures/`. Services that touch the disk, such as the hooks
+installer and the transcript watcher, get a temporary folder as `CLAUDE_HOME`,
+never the real `~/.claude`.
 
 Cover, for every use case: the happy path, **each refusal**, and a repository
 that throws — the last must become `SERVICE_UNAVAILABLE`, never a leaked stack.
@@ -33,19 +40,19 @@ Guards are called directly with a fake request and `fakeReply()`; a guard that
 lets the request through leaves `reply.sent` false.
 
 **Integration** — `api/tests/integration/routes.spec.js` boots the real `Server`
-(`app/server.js`) over a fake `db` and drives it with `app.inject()` — no port,
-no network. This is what catches the mistakes a unit test structurally cannot
+(`app/server.js`) over an in-memory SQLite database and drives it with
+`app.inject()`, plus one real socket for the event stream. This is what catches the mistakes a unit test structurally cannot
 see:
 
 - a controller renamed out from under its route row;
 - a schema that no longer matches its route;
-- guards registered in the wrong order — an anonymous invalid body must be a
-  401, not a 400;
-- an undeclared field reaching the stored document;
-- **the cross-tenant refusal** — a valid token, the right role, the wrong tenant.
+- guards registered in the wrong order — a caller from another machine must get
+  a 403 before its body is read, not a 400;
+- an undeclared field reaching the stored event;
+- **the loopback refusal** — the same request from a non-loopback address.
 
-That last case deserves its own line in every new resource's tests. A suite that
-only ever uses one tenant will pass while the API leaks.
+That last case deserves its own line for every new route. A suite that only
+ever calls from `127.0.0.1` will pass while the route leaks.
 
 ---
 
@@ -55,10 +62,14 @@ only ever uses one tenant will pass while the API leaks.
 nothing hits the network:
 
 ```javascript
-const fetchImpl = vi.fn(async () => response(200, { ok: true }));
-await ApiClient({ getToken: () => 't', fetchImpl }).get('/v1/items');
-expect(fetchImpl.mock.calls[0][1].headers.Authorization).toBe('Bearer t');
+const client = fakeClient();
+await SessionsService(client).events('a/b', { after: 7 });
+expect(client.get).toHaveBeenCalledWith('/v1/sessions/a%2Fb/events?after=7');
 ```
+
+`buildSessionModel` is the heart of the dashboard: every instrument is a field it
+derives, so a new instrument starts with a test in `session-model.test.js`
+built from a literal event log.
 
 **Components** — Testing Library. Query by role and label; assert what a user
 sees. Never assert on a class name — that tests Tailwind, not the component.
