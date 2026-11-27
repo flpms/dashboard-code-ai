@@ -92,7 +92,7 @@
   );
 </script>
 
-<Tile label="Timeline de agentes" heading="top" class="min-h-[420px]">
+<Tile label="Timeline de agentes" heading="top">
   <ul class="flex flex-wrap gap-x-3.5 gap-y-1 text-[11.5px] text-white/70" aria-label="Legenda">
     {#each usedCategories as [key, style] (key)}
       <li class="flex items-center gap-1.5">
