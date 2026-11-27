@@ -24,6 +24,9 @@ command".
   re-derives everything it draws from the event log (`buildSessionModel`).
 - The server deploy pipeline (release workflows, Dockerfile, compose,
   `DEPLOY.md`, `deploy-runbook`) is removed: nothing is deployed.
+  *Amended 2026-11-26 (#18):* a new `Dockerfile` and `docker-compose.yml`
+  package the panel to run **on the developer's machine**, with host networking
+  so hooks still arrive from loopback. They are not a deploy to a server.
 
 ## Consequences
 

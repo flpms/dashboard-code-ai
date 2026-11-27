@@ -112,11 +112,83 @@ Claude Code keeps working with the dashboard closed.
 
 ## Configuration
 
-Every variable has a default; see [`api/.env.example`](api/.env.example).
-`WATCH_DOCKER=false`, `WATCH_FILES=false` and `WATCH_SECURITY=false` turn the
-watchers off (the audit calls the npm registry, so turn it off when offline);
-`DB_PATH` moves the SQLite file (default `api/data/events.db`); `WEB_ROOT` is
-the dashboard build the collector serves (`npm start` sets it).
+Every variable has a default, so the collector starts with no `.env` at all.
+[`api/app/config/env.manifest.js`](api/app/config/env.manifest.js) is the
+source of truth; [`api/.env.example`](api/.env.example) lists them for copying.
+
+| Variable | Default | What it does |
+| --- | --- | --- |
+| `PORT` | `4317` | Port of the collector and the panel. The hooks are installed for this port. |
+| `HOST` | `127.0.0.1` | Interface to bind. Every route still refuses non-loopback callers. |
+| `DB_PATH` | `data/events.db` (in `api/`) | SQLite file with every event. `:memory:` keeps nothing. |
+| `WEB_ROOT` | unset (`npm start` sets it) | Built dashboard to serve at `/`. Unset = API only. |
+| `AUTO_INSTALL_HOOKS` | `true` | Add the hooks to `<CLAUDE_HOME>/settings.json` at boot when missing. |
+| `CLAUDE_HOME` | `~/.claude` | Where Claude Code keeps `settings.json` and `projects/`. |
+| `WATCH_TRANSCRIPTS` | `true` | Follow the transcripts in `<CLAUDE_HOME>/projects`. |
+| `TRANSCRIPT_BACKFILL_HOURS` | `6` | At boot, read transcripts written in the last N hours from their start. |
+| `WATCH_DOCKER` | `true` | Follow `docker events` for the Containers card. |
+| `WATCH_FILES` | `true` | Watch session folders for changes made outside tool calls. |
+| `WATCH_SECURITY` | `true` | Run `npm audit` (calls the npm registry; turn off when offline). |
+| `LOG_LEVEL` | `info` | `error`, `warn`, `info`, `verbose` or `debug`. |
+| `LOG_PATH` | unset | Folder for log files. Unset = console only. |
+| `CORS_ALLOWED_ORIGINS` | the dev server's origins | Origins allowed to call the API (only `npm run dev:web` needs it). |
+
+In Docker, set `PANEL_PORT`, `PROJECTS_DIR`, `AUTO_INSTALL_HOOKS` and the
+`WATCH_*` switches in the shell or an `.env` beside `docker-compose.yml`.
+
+---
+
+## Troubleshooting
+
+**No session shows up.** Go through these in order; each one rules out a layer.
+
+1. **Is the collector running on the port you think?**
+   `curl -s http://127.0.0.1:4317/v1` answers `{"status":"ok",…}`. If not,
+   start it with `npm start` (or check `docker compose logs panel`).
+2. **Were the hooks installed?** The boot log says one of
+   `HooksInstaller::installed`, `::present` or `::failed`. Confirm with
+   `grep -c '127.0.0.1:4317/v1/hooks' ~/.claude/settings.json` (it should print
+   a number above 0). `::failed` means `settings.json` is not valid JSON; the
+   collector never overwrites a file it cannot read, so fix it (or restore
+   `settings.json.bak`) and restart. With `AUTO_INSTALL_HOOKS=false`, run
+   `npm run hooks:install`.
+3. **Is the session newer than the hooks?** Claude Code reads hooks only when a
+   session starts. Open a new session, or rely on the transcript watcher: with
+   `WATCH_TRANSCRIPTS=true` an already-open session appears as soon as it writes
+   its next line, if its transcript changed in the last
+   `TRANSCRIPT_BACKFILL_HOURS`.
+4. **Did anything happen yet?** Claude Code does not send HTTP hooks for
+   `SessionStart`, so a session appears on its first prompt or tool call, not
+   when the window opens.
+5. **Is the session on this machine?** Sessions running in the cloud (Claude
+   Code on the web, a remote container, a VM) post to their own `127.0.0.1` and
+   never reach this collector. Run the panel where Claude Code runs.
+6. **Does the log show `Loopback::refused`?** The hook arrived from an address
+   that is not loopback and got a 403. In Docker this means host networking is off (see
+   [Run in Docker](#run-in-docker)); outside Docker, check that nothing proxies
+   `127.0.0.1:4317`.
+
+**Changed the port and sessions stopped arriving.** Hooks carry the URL they
+were installed with. Starting on a new port adds hooks for it but leaves the
+old ones. Remove them with
+`npm --prefix api run hooks:uninstall -- --url http://127.0.0.1:<old port>/v1/hooks`.
+
+**Undo everything the collector did to Claude Code.** `npm run hooks:uninstall`
+removes exactly its hooks and keeps the rest of `settings.json`. The file as it
+was before the first install is in `~/.claude/settings.json.bak`.
+
+**The Containers card stays empty.** The collector needs the Docker CLI and
+daemon (natively) or the socket mount (Docker), and `WATCH_DOCKER=true`.
+Containers are attributed to a session only if a `docker …` or test command ran
+in that session in the 2 minutes before.
+
+**The Security card stays empty.** `npm audit` needs a `package-lock.json` in
+the session folder and access to the npm registry. In Docker, the session folder
+must be inside `PROJECTS_DIR`.
+
+**Claude Code got slow.** It should not: each hook times out after 2 seconds
+and an unreachable collector fails immediately. If a hook hangs, something is
+listening on the port without answering; stop it or turn the hooks off.
 
 ---
 
@@ -131,11 +203,22 @@ npm --prefix web run test:e2e
 
 ## How the code is organised
 
-The layering, dependency injection and "behaviour is data" rules from the
-template this repository started from still apply:
-[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), the [ADRs](docs/adr/) and the
-skills in `.claude/skills/`. [ADR 0008](docs/adr/0008-local-collector-with-sqlite.md)
-records why the API became a local collector on SQLite.
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): the two apps, the layering,
+  dependency injection and "behaviour is data" rules. Per side:
+  [`api/ARCHITECTURE.md`](api/ARCHITECTURE.md) and
+  [`web/ARCHITECTURE.md`](web/ARCHITECTURE.md).
+- [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md) and
+  [`docs/TESTING.md`](docs/TESTING.md).
+- The [ADRs](docs/adr/) record the decisions;
+  [ADR 0008](docs/adr/0008-local-collector-with-sqlite.md) is why the API is a
+  local collector on SQLite.
+- The skills in `.claude/skills/` are the same conventions, written for an agent.
+
+## Contributing and changes
+
+What changed and when is in [`CHANGELOG.md`](CHANGELOG.md). How to open a pull
+request, and which changelog entry and docs it must update, is in
+[`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## License
 

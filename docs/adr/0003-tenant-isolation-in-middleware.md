@@ -1,6 +1,6 @@
 # 3. Tenant isolation in a guard, not by convention
 
-**Status:** accepted
+**Status:** superseded by [0008](0008-local-collector-with-sqlite.md) — the collector has no tenants; its one route flag is `local`.
 
 ## Context
 

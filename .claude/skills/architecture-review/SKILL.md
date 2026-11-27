@@ -111,7 +111,18 @@ By eye:
 
 ---
 
-## Step 5 — The reviewer's questions
+## Step 5 — Changelog and docs
+
+- [ ] `CHANGELOG.md` has an entry under `## [Unreleased]`, in the right section,
+      saying what the person running the panel will see or have to do. Only a
+      change nobody could notice skips it, with the `skip-changelog` label.
+- [ ] Every doc the change makes wrong is updated in the same diff — use the
+      map in `CONTRIBUTING.md#which-doc-to-update`. Grep the docs for any name
+      that was renamed or removed.
+
+---
+
+## Step 6 — The reviewer's questions
 
 1. If this breaks in the middle of someone's session, what does the log say, and is it enough?
 2. What happens on the second call? On a burst of hooks? With the collector down (hooks must fail silently)?

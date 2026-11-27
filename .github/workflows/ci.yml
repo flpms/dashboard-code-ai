@@ -22,6 +22,33 @@ permissions:
   contents: read
 
 jobs:
+  # Every pull request says what changed for the person running the panel
+  # (CONTRIBUTING.md#changelog). Dependabot cannot write the entry, and a change
+  # nobody can notice opts out with the skip-changelog label.
+  changelog:
+    name: Changelog
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.user.login != 'dependabot[bot]' &&
+      !contains(github.event.pull_request.labels.*.name, 'skip-changelog')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: CHANGELOG.md is updated
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if git diff --name-only "$BASE_SHA"..."$HEAD_SHA" | grep -qx 'CHANGELOG.md'; then
+            echo "CHANGELOG.md updated."
+            exit 0
+          fi
+          echo "::error file=CHANGELOG.md::Add an entry under [Unreleased] (see CONTRIBUTING.md#changelog), or label the pull request skip-changelog and say why."
+          exit 1
+
   # The oldest Node the README promises. CI otherwise runs the newest patch of
   # each line, which hides a dependency that dropped an older 24.x (jsdom 30
   # needs 24.15+); --engine-strict turns that EBADENGINE warning into a failure.

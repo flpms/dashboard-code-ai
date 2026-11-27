@@ -39,6 +39,17 @@ suggestions.
 - Branches are `<type>-<short-description>` (`feat-`, `fix-`, `ci-`, `docs-`,
   `refactor-`), no slashes.
 
+## Every pull request updates the changelog and the docs
+
+- Add an entry to [`CHANGELOG.md`](CHANGELOG.md) under `## [Unreleased]`, in the
+  Keep a Changelog section that fits, written for the person running the panel.
+  CI fails a pull request that does not touch it; only a change nobody could
+  notice takes the `skip-changelog` label, with the reason in the description.
+- Update every doc the change makes wrong, in the same pull request. The map of
+  which change touches which doc is in
+  [`CONTRIBUTING.md`](CONTRIBUTING.md#which-doc-to-update). A new variable,
+  command, instrument or capture path without its README line is not done.
+
 ## Verify before claiming done
 
 ```bash

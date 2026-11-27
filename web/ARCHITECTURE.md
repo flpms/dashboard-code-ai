@@ -20,7 +20,7 @@ can host.
 ├──────────────────────────────────────────┤
 │  Schemas          src/lib/schemas/**     │  validation
 └──────────────────────────────────────────┘
-    Session store — read and written by pages only
+    Event log — held by the page, drawn through buildSessionModel()
 ```
 
 ### Pages — `src/routes/**`
@@ -29,8 +29,11 @@ The only layer permitted to know about all the others. A page builds its
 services, holds screen state in runes, calls schemas, and hands plain data down
 to panels.
 
-Route groups: `(auth)` for the unauthenticated screens, `(app)` for everything
-behind the session guard. The guard lives once, in `(app)/+layout.svelte`.
+There is one page today, `src/routes/+page.svelte`: the dashboard. It lists the
+sessions, holds the selected session's event log, keeps the SSE stream open and
+passes `buildSessionModel(events)` down to the panels in
+`src/lib/panels/dashboard/`. There is no login: the collector answers only to
+this machine.
 
 Forbidden: raw `fetch`, business validation.
 
@@ -53,15 +56,15 @@ instead of fighting the cascade.
 
 ### Services — `src/lib/services/**`
 
-Stateless factories over `ApiClient`. One resource per file. The tenant is a
-parameter, never a module constant — a hardcoded tenant is why a "multi-tenant"
-front end quietly only ever works for one customer.
+Stateless factories over `ApiClient`. One resource per file
+(`sessions.service.js` today).
 
 Forbidden: importing stores, importing another service, module-level mutable
 state, calling `fetch` directly.
 
-`api-client.js` is the only door to HTTP. It holds the token, the status →
-message table, the 401 handler and the non-JSON-body fallback. "Add a retry" or
+`api-client.js` is the only door to HTTP and to the event stream
+(`subscribe()` wraps `EventSource`). It holds the base URL, the status → message
+table and the non-JSON-body fallback. "Add a retry" or
 "send a correlation id" is one file, not thirty call sites.
 
 ### Schemas — `src/lib/schemas/**`
@@ -77,15 +80,17 @@ directly.
 
 ## State
 
-`src/lib/store/session.svelte.js` is the only mutable global.
+The selected session's **event log** is the state. The page holds it in `$state`,
+appends what the stream delivers (each event checked by `eventSchema` first),
+and on reconnect asks the collector for events after the last `seq` it has.
 
-Svelte 5 runes replace the writable-store ceremony: `$state` in a `.svelte.js`
-module is reactive wherever it is read. The module exports an object of getters
-rather than the raw binding, so writes funnel through `start()` and `clear()` and
-"who changed the session?" has a small answer.
+Everything drawn is derived: `buildSessionModel(events, now)` in
+`src/lib/utils/session-model.js` turns the log into agents, spans, tests, files,
+containers, resources and alerts. It is a pure function with its own tests. A
+panel never keeps a second copy of any of that; a new instrument is a new field
+in the model, not new state in a component.
 
-Everything else is local `$state` in the page that owns it. There is no global
-data cache; a screen fetches what it shows.
+There is no global store and no data cache.
 
 ---
 
@@ -96,12 +101,15 @@ data cache; a screen fetches what it shows.
 - Every mutation reports **both** outcomes visibly — a confirmation on success,
   a `role="alert"` message on failure. The failure text comes from `ApiClient`'s
   status → message table; a validation failure names the fields.
-- Never swallow an error: log it with a location (`[ItemsPage.save]`), show it,
+- Never swallow an error: log it with a location (`[DashboardPage.loadSessions]`), show it,
   and re-throw only if the caller reacts to it.
 
 ---
 
 ## Listings and the details drawer
+
+The dashboard has neither listings nor forms yet; these are the conventions
+for when it grows them (the `web-feature` skill applies them).
 
 When a listing has more to show than its columns, the answer is a read-only
 drawer that answers one question — _what is recorded in this row?_ — built the
@@ -144,8 +152,8 @@ arriving while open updates it; `entity: null` does not throw.
   only the returned reference in form state) or **upload on save** (keep files
   locally until the record exists, when abandoning a draft must not leave
   orphans in storage).
-- A form that keeps a local draft namespaces the key by tenant and user and
-  clears it on a successful save.
+- A form that keeps a local draft namespaces its storage key and clears it on a
+  successful save.
 
 ---
 
@@ -161,8 +169,7 @@ arriving while open updates it; `entity: null` does not throw.
 | Two-way | `let { value = $bindable('') } = $props()`                              |
 
 Seeding local state from a prop captures only the initial value. Either wrap in
-`untrack()` and let the parent remount with `{#key}` (see
-`panels/items/item-form.svelte`), or derive it. `svelte-check` warns when you
+`untrack()` and let the parent remount with `{#key}`, or derive it. `svelte-check` warns when you
 forget.
 
 `prefer-const` is disabled inside components: runes require `let`.
@@ -190,7 +197,14 @@ them buys casts rather than safety.
 
 Tailwind 4 through `@tailwindcss/vite`. There is no `tailwind.config.js`: design
 tokens are CSS custom properties under `@theme` in `src/app.css`, and a token
-added there is immediately available as a utility (`bg-brand-600`).
+added there is immediately available as a utility (`bg-tile-tests`).
+
+The look is the live tiles design system: glass tiles tinted per instrument
+(`--color-tile-*`) on a dark field, big thin readings, lowercase labels. Two
+domain-free components carry it, `components/ui/tile.svelte` and
+`components/ui/reading.svelte`; a panel composes them and never restyles them.
+A tile switches to its signal tint only when it has something to say (failing
+tests, a high or critical advisory, an alert).
 
 ---
 
