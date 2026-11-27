@@ -2,7 +2,7 @@
  * The collector's sessions and their event logs. Stateless factory over
  * `ApiClient`, no stores, no other services — composition happens in the page.
  *
- * @import { CollectorEvent, HttpClient, SessionSummary } from '$lib/types.js'
+ * @import { CollectorEvent, HttpClient, RefreshResult, SessionSummary } from '$lib/types.js'
  */
 
 /**
@@ -36,5 +36,13 @@ export const SessionsService = client => {
   const stream = (onevent, onstatus) =>
     client.subscribe('/v1/stream', { onmessage: onevent, onstatus });
 
-  return { events, list, stream };
+  /**
+   * Asks the collector to rescan Claude Code's transcripts for sessions it
+   * has not seen yet. New ones then arrive through the stream like any event.
+   *
+   * @returns {Promise<RefreshResult>}
+   */
+  const refresh = () => client.post('/v1/sessions/refresh');
+
+  return { events, list, refresh, stream };
 };

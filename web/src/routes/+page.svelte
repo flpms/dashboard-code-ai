@@ -3,9 +3,12 @@
   import InstrumentsBar from '$panels/dashboard/instruments-bar.svelte';
   import SessionsList from '$panels/dashboard/sessions-list.svelte';
   import SpanDetails from '$panels/dashboard/span-details.svelte';
-  import { eventSchema, validate } from '$schemas/index.js';
-  import { ApiClient } from '$services/api-client.js';
+  import SettingsMenu from '$panels/settings/settings-menu.svelte';
+  import Button from '$lib/components/ui/button.svelte';
+  import { eventSchema, settingsSchema, validate } from '$schemas/index.js';
+  import { ApiClient, ApiError } from '$services/api-client.js';
   import { SessionsService } from '$services/sessions.service.js';
+  import { SettingsService } from '$services/settings.service.js';
   import { buildSessionModel } from '$lib/utils/session-model.js';
   import { baseName } from '$lib/utils/format.js';
 
@@ -16,9 +19,11 @@
    *
    * The event log is the state; everything drawn is `buildSessionModel(log)`.
    *
-   * @import { CollectorEvent, SessionSummary, ToolSpan } from '$lib/types.js'
+   * @import { CollectorEvent, CollectorSettings, SessionSummary, ToolSpan } from '$lib/types.js'
    */
-  const sessionsService = SessionsService(ApiClient());
+  const client = ApiClient();
+  const sessionsService = SessionsService(client);
+  const settingsService = SettingsService(client);
 
   /** Anything thrown can be anything. Narrow once, here. @param {unknown} error */
   const reasonFor = error => (error instanceof Error ? error.message : 'Erro inesperado.');
@@ -28,6 +33,21 @@
     open: { text: 'coletor conectado', dot: 'bg-emerald-400' },
     error: { text: 'coletor offline', dot: 'bg-red-500' },
   });
+
+  /** @param {number} count */
+  const refreshNoticeFor = count =>
+    ({ 0: 'nenhuma sessão nova', 1: '1 sessão nova' })[count] ?? `${count} sessões novas`;
+
+  // What the person is told when a settings call fails, by status; the rest
+  // falls back to the API client's message.
+  /** @type {Record<number, string>} */
+  const SETTINGS_FAILURES = {
+    422: 'O settings.json do Claude Code não é um JSON válido. Corrija o arquivo à mão e tente de novo.',
+  };
+
+  /** @param {unknown} error */
+  const settingsFailureFor = error =>
+    (error instanceof ApiError && SETTINGS_FAILURES[error.status]) || reasonFor(error);
 
   /** @type {SessionSummary[]} */
   let sessions = $state([]);
@@ -43,6 +63,18 @@
   /** @type {'connecting'|'open'|'error'} */
   let streamStatus = $state('connecting');
   let nowMs = $state(Date.now());
+  let refreshing = $state(false);
+  let refreshNotice = $state('');
+
+  let settingsOpen = $state(false);
+  /** @type {CollectorSettings|null} */
+  let settingsView = $state(null);
+  /** @type {''|'load'|'save'|'install'|'remove'} */
+  let settingsBusy = $state('');
+  let settingsNotice = $state('');
+  let settingsError = $state('');
+  /** @type {Record<string, string>} */
+  let settingsErrors = $state({});
 
   const selected = $derived(sessions.find(session => session.id === selectedId) ?? null);
   const model = $derived(buildSessionModel(events, nowMs));
@@ -141,6 +173,76 @@
     selectedSpanId = span.id;
   };
 
+  // Rescans Claude Code's transcripts; what it finds arrives through the stream.
+  const refresh = async () => {
+    refreshing = true;
+    refreshNotice = '';
+    try {
+      const result = await sessionsService.refresh();
+      await loadSessions();
+      refreshNotice = refreshNoticeFor(result.newSessions);
+    } catch (error) {
+      console.error('[DashboardPage.refresh]', error);
+      failure = `Não foi possível atualizar as sessões: ${reasonFor(error)}`;
+    } finally {
+      refreshing = false;
+    }
+  };
+
+  /**
+   * One settings call: shows it as busy, keeps the fresh settings it returns
+   * and reports both outcomes.
+   *
+   * @param {'load'|'save'|'install'|'remove'} busy
+   * @param {() => Promise<CollectorSettings>} action
+   * @param {string} notice  the confirmation, empty for a plain load
+   */
+  const runSettings = async (busy, action, notice) => {
+    settingsBusy = busy;
+    settingsNotice = '';
+    settingsError = '';
+    try {
+      settingsView = await action();
+      settingsNotice = notice;
+    } catch (error) {
+      console.error(`[DashboardPage.settings.${busy}]`, error);
+      settingsError = settingsFailureFor(error);
+    } finally {
+      settingsBusy = '';
+    }
+  };
+
+  const openSettings = () => {
+    settingsOpen = true;
+    settingsErrors = {};
+    runSettings('load', settingsService.get, '');
+  };
+
+  /** @param {{ autoInstallHooks: boolean, backfillHours: number|string }} form */
+  const saveSettings = form => {
+    const result = validate(settingsSchema, form);
+    if (!result.success) {
+      settingsErrors = result.errors;
+      return;
+    }
+    settingsErrors = {};
+    runSettings('save', () => settingsService.update(result.data), 'Configurações salvas.');
+  };
+
+  const installHooks = () =>
+    runSettings(
+      'install',
+      settingsService.installHooks,
+      'Hooks instalados. Sessões novas do Claude Code já enviam eventos.'
+    );
+
+  const removeHooks = () =>
+    runSettings(
+      'remove',
+      settingsService.removeHooks,
+      'Hooks removidos e instalação automática desligada.'
+    );
+
   $effect(() => {
     loadSessions();
     const close = sessionsService.stream(onStreamEvent, onStreamStatus);
@@ -173,9 +275,25 @@
     <div
       class="ml-auto flex max-w-full min-w-0 flex-col items-end gap-0.5 pb-1 text-[13px] font-light text-white/65"
     >
+      <div class="flex items-center gap-2 pb-1">
+        <Button variant="tile" size="sm" loading={refreshing} onclick={refresh}>
+          {#if !refreshing}<span aria-hidden="true">↻</span>{/if}
+          atualizar
+        </Button>
+        <Button
+          variant="tile"
+          size="sm"
+          aria-haspopup="dialog"
+          aria-expanded={settingsOpen}
+          onclick={openSettings}
+        >
+          <span aria-hidden="true">☰</span>
+          configurações
+        </Button>
+      </div>
       <span class="flex items-center gap-2" role="status">
         <span class={`h-2 w-2 ${STREAM_LABELS[streamStatus].dot}`} aria-hidden="true"></span>
-        {STREAM_LABELS[streamStatus].text}
+        {STREAM_LABELS[streamStatus].text}{refreshNotice ? ` · ${refreshNotice}` : ''}
       </span>
       {#if selected}
         <span
@@ -217,7 +335,20 @@
 
   {#if !selected && !loadingSessions && !failure}
     <div class="glass-tile p-12 text-center text-sm font-light text-white/70">
-      Nenhuma sessão registrada. Instale os hooks e abra uma sessão do Claude Code.
+      Nenhuma sessão registrada. Abra uma sessão do Claude Code ou toque em atualizar.
     </div>
   {/if}
 </div>
+
+<SettingsMenu
+  open={settingsOpen}
+  view={settingsView}
+  busy={settingsBusy}
+  notice={settingsNotice}
+  error={settingsError}
+  errors={settingsErrors}
+  onclose={() => (settingsOpen = false)}
+  onsave={saveSettings}
+  oninstall={installHooks}
+  onremove={removeHooks}
+/>

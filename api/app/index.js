@@ -15,6 +15,7 @@ import winston from 'winston';
 import { StartupConfig } from './config/index.js';
 import { enums } from './enums/index.js';
 import lib from './lib/index.js';
+import { hookUrlFor } from './v1/domain/hook-settings.js';
 import { Server } from './server.js';
 
 const start = async () => {
@@ -55,9 +56,9 @@ const start = async () => {
   Logger.info(`Collector listening on http://${env.app.host}:${env.app.port}/v1`);
   if (env.app.webRoot) Logger.info(`Dashboard on http://${env.app.host}:${env.app.port}/`);
 
-  // Hooks always call loopback: on 0.0.0.0 the collector answers there too.
-  const hookHost = ['0.0.0.0', '::'].includes(env.app.host) ? '127.0.0.1' : env.app.host;
-  services.hooksInstaller.ensure(`http://${hookHost}:${env.app.port}/v1/hooks`);
+  services.hooksInstaller.ensure(hookUrlFor(env.app.host, env.app.port), {
+    enabled: services.settingsStore.get().autoInstallHooks,
+  });
 
   return app;
 };

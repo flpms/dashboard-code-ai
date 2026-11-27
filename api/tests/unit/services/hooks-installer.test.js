@@ -25,8 +25,7 @@ const memoryFs = (files = {}) => {
   };
 };
 
-const installer = (fs, enabled = true) =>
-  HooksInstaller({ enabled, settingsPath: PATH, fs, dirname, Logger: fakeLogger() });
+const installer = fs => HooksInstaller({ settingsPath: PATH, fs, dirname, Logger: fakeLogger() });
 
 describe('HooksInstaller', () => {
   it('adds every collector hook and keeps what was there, with a backup', () => {
@@ -64,7 +63,36 @@ describe('HooksInstaller', () => {
 
   it('does nothing when switched off', () => {
     const fs = memoryFs();
-    assert.equal(installer(fs, false).ensure(URL), 'disabled');
+    assert.equal(installer(fs).ensure(URL, { enabled: false }), 'disabled');
     assert.equal(fs.store.size, 0);
+  });
+
+  it('reports whether the hooks are in place', () => {
+    const fs = memoryFs();
+    assert.deepEqual(installer(fs).status(URL), {
+      installed: false,
+      readable: true,
+      settingsPath: PATH,
+    });
+    installer(fs).install(URL);
+    assert.equal(installer(fs).status(URL).installed, true);
+    assert.equal(installer(memoryFs({ [PATH]: '{' })).status(URL).readable, false);
+  });
+
+  it("removes only its own hooks, keeping the user's", () => {
+    const own = { type: 'command', command: 'echo hi' };
+    const fs = memoryFs({ [PATH]: JSON.stringify({ hooks: { Stop: [{ hooks: [own] }] } }) });
+    installer(fs).install(URL);
+
+    assert.equal(installer(fs).remove(URL), 'removed');
+    assert.deepEqual(JSON.parse(fs.store.get(PATH)).hooks, { Stop: [{ hooks: [own] }] });
+    assert.equal(installer(fs).remove(URL), 'absent');
+  });
+
+  it('removes nothing from a missing or unreadable file', () => {
+    assert.equal(installer(memoryFs()).remove(URL), 'absent');
+    const fs = memoryFs({ [PATH]: '{ not json' });
+    assert.equal(installer(fs).remove(URL), 'failed');
+    assert.equal(fs.store.get(PATH), '{ not json');
   });
 });

@@ -14,6 +14,12 @@
  * are followed from their end, so the history of every past session is not
  * imported each time the panel starts.
  *
+ * `rescan` is the dashboard's refresh button: it walks the folder by hand,
+ * which picks up anything the file watcher missed (a network or Docker mount
+ * can drop events), reads what was appended since, and reads from the start a
+ * transcript that is now inside the backfill window and belongs to a session
+ * the collector has never seen.
+ *
  * Reads are batched: Claude Code appends a few lines per step, and waiting a
  * moment lets the HTTP hook for the same step (when hooks are on) arrive
  * first, which is what tells the collector to ignore the transcript.
@@ -45,6 +51,7 @@ export const TranscriptWatcher = ({
   root,
   backfillMs,
   fs,
+  join,
   Logger,
   watch,
   now = Date.now,
@@ -140,19 +147,71 @@ export const TranscriptWatcher = ({
     if (!timer) timer = setTimeout(flush, FLUSH_MS);
   };
 
-  const shouldBackfill = (path, file) => {
-    if (ready) return true;
-    if (isKnownSession(file.sessionId)) return false;
-    return now() - fs.statSync(path).mtimeMs <= backfillMs;
+  const isRecentUnknown = (path, file, windowMs) =>
+    !isKnownSession(file.sessionId) && now() - fs.statSync(path).mtimeMs <= windowMs;
+
+  const shouldBackfill = (path, file, windowMs) => ready || isRecentUnknown(path, file, windowMs);
+
+  // `fromStart` remembers whether the file was read from its first byte, so a
+  // rescan with a wider window can go back for the ones that were not.
+  const follow = (path, file, windowMs) => {
+    const fromStart = shouldBackfill(path, file, windowMs);
+    const offset = fromStart ? 0 : fs.statSync(path).size;
+    files.set(path, { offset, fromStart, partial: Buffer.alloc(0) });
+    return fromStart;
   };
 
   const onAdd = path => {
     const file = transcriptFileOf(path);
     if (!file || files.has(path)) return;
+    if (follow(path, file, backfillMs)) schedule(path);
+  };
 
-    const offset = shouldBackfill(path, file) ? 0 : fs.statSync(path).size;
-    files.set(path, { offset, partial: Buffer.alloc(0) });
-    if (offset === 0) schedule(path);
+  const listTranscripts = () => {
+    if (!fs.existsSync(root)) return [];
+    return fs
+      .readdirSync(root, { recursive: true })
+      .map(relative => join(root, String(relative)))
+      .filter(path => path.endsWith('.jsonl') && transcriptFileOf(path));
+  };
+
+  // What a rescan does with one file: whether it has anything to read.
+  const revisit = (path, windowMs) => {
+    const file = transcriptFileOf(path);
+    const state = files.get(path);
+    if (!state) return follow(path, file, windowMs);
+    if (!state.fromStart && isRecentUnknown(path, file, windowMs)) {
+      Object.assign(state, { offset: 0, fromStart: true, partial: Buffer.alloc(0) });
+      return true;
+    }
+    return fs.statSync(path).size !== state.offset;
+  };
+
+  /**
+   * @param {{ backfillMs?: number }} [options]  the window for this rescan
+   * @returns {{ transcripts: number, read: number, newSessions: number }}
+   */
+  const rescan = ({ backfillMs: windowMs = backfillMs } = {}) => {
+    clearTimeout(timer);
+    const paths = listTranscripts();
+    const toRead = paths.filter(path => {
+      try {
+        return revisit(path, windowMs);
+      } catch (error) {
+        Logger.warn(`TranscriptWatcher::rescan ${path} - ${error.message}`);
+        return false;
+      }
+    });
+    const fresh = new Set(
+      toRead.map(path => transcriptFileOf(path)?.sessionId).filter(id => !isKnownSession(id))
+    );
+    toRead.forEach(path => dirty.add(path));
+    flush();
+    const newSessions = [...fresh].filter(id => isKnownSession(id)).length;
+    Logger.info(
+      `TranscriptWatcher::rescan read ${toRead.length} of ${paths.length} transcripts, ${newSessions} new sessions`
+    );
+    return { transcripts: paths.length, read: toRead.length, newSessions };
   };
 
   /**
@@ -189,5 +248,5 @@ export const TranscriptWatcher = ({
     watcher = null;
   };
 
-  return { flush, start, stop };
+  return { flush, rescan, start, stop };
 };

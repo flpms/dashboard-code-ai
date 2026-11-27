@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { dirname } from 'node:path';
+import * as fs from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { after, before, describe, it } from 'node:test';
 
@@ -10,6 +12,8 @@ import { DBStartup } from '../../app/config/db.config.js';
 import { enums } from '../../app/enums/index.js';
 import lib from '../../app/lib/index.js';
 import { Server } from '../../app/server.js';
+import { HooksInstaller } from '../../app/services/hooks-installer.service.js';
+import { SettingsStore } from '../../app/services/settings-store.service.js';
 import { fakeClock, fakeFileWatcher, fakeLogger, fakeSecurityAuditor } from '../helpers/fakes.js';
 
 /**
@@ -24,6 +28,9 @@ import { fakeClock, fakeFileWatcher, fakeLogger, fakeSecurityAuditor } from '../
 
 const WEB_ORIGIN = 'http://localhost:5173';
 
+// The settings routes edit a real settings.json, in a folder of the test's own.
+const claudeHome = fs.mkdtempSync(join(tmpdir(), 'claude-home-'));
+
 const env = {
   app: {
     env: 'test',
@@ -31,9 +38,12 @@ const env = {
     version: '0.0.0',
     commitSha: 'test',
     corsAllowedOrigins: WEB_ORIGIN,
+    host: '127.0.0.1',
+    port: 4317,
   },
+  claude: { home: claudeHome },
   db: { path: ':memory:' },
-  watchers: { docker: false, files: false, security: false },
+  watchers: { docker: false, files: false, security: false, transcripts: false },
 };
 
 const Logger = fakeLogger();
@@ -75,13 +85,33 @@ describe('v1 routes', () => {
         dockerWatcher: { start: () => {}, stop: () => {} },
         fileWatcher: fakeFileWatcher(),
         securityAuditor: fakeSecurityAuditor(),
-        transcriptWatcher: { start: () => {}, stop: async () => {} },
+        hooksInstaller: HooksInstaller({
+          settingsPath: join(claudeHome, 'settings.json'),
+          fs,
+          dirname,
+          Logger,
+        }),
+        settingsStore: SettingsStore({
+          path: null,
+          defaults: { autoInstallHooks: true, backfillHours: 6 },
+          fs,
+          dirname,
+          Logger,
+        }),
+        transcriptWatcher: {
+          start: () => {},
+          stop: async () => {},
+          rescan: () => ({ transcripts: 2, read: 1, newSessions: 1 }),
+        },
       },
     });
     await app.ready();
   });
 
-  after(() => app.close());
+  after(async () => {
+    await app.close();
+    fs.rmSync(claudeHome, { recursive: true, force: true });
+  });
 
   it('serves the health check, with or without the slash', async () => {
     const [bare, slashed] = await Promise.all([call('/v1'), call('/v1/')]);
@@ -198,5 +228,68 @@ describe('v1 routes', () => {
     const response = await call('/v1/nope');
     assert.equal(response.statusCode, 404);
     assert.ok(response.json().message);
+  });
+
+  describe('settings and refresh', () => {
+    it('refuses every settings route to a caller from another machine', async () => {
+      const calls = [
+        ['GET', '/v1/settings'],
+        ['PATCH', '/v1/settings'],
+        ['PUT', '/v1/settings/hooks'],
+        ['DELETE', '/v1/settings/hooks'],
+        ['POST', '/v1/sessions/refresh'],
+      ];
+      const responses = await Promise.all(
+        calls.map(([method, url]) => call(url, { method, remoteAddress: '10.0.0.7' }))
+      );
+      assert.deepEqual(
+        responses.map(response => response.statusCode),
+        calls.map(() => 403)
+      );
+    });
+
+    it('shows the settings and the hook state', async () => {
+      const response = await call('/v1/settings');
+      assert.equal(response.statusCode, 200);
+      assert.deepEqual(response.json().settings, { autoInstallHooks: true, backfillHours: 6 });
+      assert.equal(response.json().hooks.url, 'http://127.0.0.1:4317/v1/hooks');
+    });
+
+    it('saves a valid change and rejects an invalid one', async () => {
+      const saved = await call('/v1/settings', { method: 'PATCH', body: { backfillHours: 24 } });
+      const tooWide = await call('/v1/settings', {
+        method: 'PATCH',
+        body: { backfillHours: 1000 },
+      });
+      const empty = await call('/v1/settings', { method: 'PATCH', body: {} });
+
+      assert.equal(saved.json().settings.backfillHours, 24);
+      assert.equal(tooWide.statusCode, 400);
+      assert.equal(empty.statusCode, 400);
+    });
+
+    it('installs and removes the hooks in settings.json', async () => {
+      const installed = await call('/v1/settings/hooks', { method: 'PUT' });
+      assert.equal(installed.json().hooks.installed, true);
+      assert.ok(JSON.parse(fs.readFileSync(join(claudeHome, 'settings.json'), 'utf8')).hooks);
+
+      const removed = await call('/v1/settings/hooks', { method: 'DELETE' });
+      assert.equal(removed.json().hooks.installed, false);
+      assert.equal(removed.json().settings.autoInstallHooks, false);
+    });
+
+    it('refreshes the sessions from the transcripts', async () => {
+      const response = await call('/v1/sessions/refresh', { method: 'POST' });
+      assert.equal(response.statusCode, 200);
+      assert.deepEqual(response.json(), { transcripts: 2, read: 1, newSessions: 1 });
+    });
+
+    it('does not let another origin install hooks past the preflight', async () => {
+      const preflight = await call('/v1/settings/hooks', {
+        method: 'OPTIONS',
+        headers: { origin: 'https://evil.example', 'access-control-request-method': 'PUT' },
+      });
+      assert.equal(preflight.headers['access-control-allow-origin'], undefined);
+    });
   });
 });

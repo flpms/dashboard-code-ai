@@ -76,4 +76,51 @@ test.describe('dashboard', () => {
 
     await expect(page.getByRole('alert')).toContainText('Não foi possível falar com o coletor');
   });
+
+  test('refreshes and says how many new sessions it found', async ({ page }) => {
+    await stubCollector(page);
+    await page.route('**/v1/sessions/refresh', route =>
+      route.fulfill({ json: { transcripts: 4, read: 1, newSessions: 1 } })
+    );
+    await page.goto('/');
+
+    await page.getByRole('button', { name: /atualizar/ }).click();
+    await expect(page.getByRole('status').first()).toContainText('1 sessão nova');
+  });
+
+  test('installs the hooks from the settings menu', async ({ page }) => {
+    const settings = installed => ({
+      settings: { autoInstallHooks: true, backfillHours: 6 },
+      hooks: {
+        installed,
+        readable: true,
+        url: 'http://127.0.0.1:4317/v1/hooks',
+        settingsPath: '/home/dev/.claude/settings.json',
+      },
+      collector: {
+        version: '0.1.0',
+        host: '127.0.0.1',
+        port: 4317,
+        claudeHome: '/home/dev/.claude',
+      },
+      watchers: { docker: true, files: true, security: true, transcripts: true },
+    });
+    await stubCollector(page);
+    await page.route('**/v1/settings', route => route.fulfill({ json: settings(false) }));
+    await page.route('**/v1/settings/hooks', route =>
+      route.fulfill({ json: settings(route.request().method() === 'PUT') })
+    );
+    await page.goto('/');
+
+    await page.getByRole('button', { name: /configurações/ }).click();
+    const menu = page.getByRole('dialog', { name: 'configurações' });
+    await expect(menu).toContainText('não instalados');
+
+    await menu.getByRole('button', { name: 'instalar hooks' }).click();
+    await expect(menu).toContainText('Hooks instalados');
+    await expect(menu.getByRole('button', { name: 'remover hooks' })).toBeVisible();
+
+    await page.keyboard.press('Escape');
+    await expect(menu).toBeHidden();
+  });
 });
