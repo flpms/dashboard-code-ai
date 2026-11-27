@@ -50,6 +50,20 @@ The collector listens to Claude Code two ways, with nothing to configure:
 Running natively is the simplest setup: the collector sees your project folders
 and the Docker daemon exactly as Claude Code does.
 
+Two controls sit at the top right of the panel:
+
+- **atualizar** rescans the transcripts folder by hand. It picks up anything
+  the file watcher missed (a Docker or network mount can drop events) and, with
+  a wider recovery window, older sessions the collector has never shown. It
+  says how many new sessions it found.
+- **configurações** opens the side menu. It shows whether the hooks are in
+  `settings.json` and installs or removes them on the spot, turns automatic
+  installation on or off, sets how many hours back a refresh and the next start
+  recover, and shows the address, version and which watchers are on. The two
+  settings are saved in `panel-settings.json` beside the database (`DB_PATH`) and
+  win over `AUTO_INSTALL_HOOKS` and `TRANSCRIPT_BACKFILL_HOURS`. Address, port
+  and watchers stay in the environment: change them there and restart.
+
 Rather manage the hooks yourself? Set `AUTO_INSTALL_HOOKS=false` and use
 `npm run hooks:install` / `npm run hooks:uninstall` (both keep a
 `settings.json.bak`). To instrument one project only:
@@ -122,10 +136,10 @@ source of truth; [`api/.env.example`](api/.env.example) lists them for copying.
 | `HOST` | `127.0.0.1` | Interface to bind. Every route still refuses non-loopback callers. |
 | `DB_PATH` | `data/events.db` (in `api/`) | SQLite file with every event. `:memory:` keeps nothing. |
 | `WEB_ROOT` | unset (`npm start` sets it) | Built dashboard to serve at `/`. Unset = API only. |
-| `AUTO_INSTALL_HOOKS` | `true` | Add the hooks to `<CLAUDE_HOME>/settings.json` at boot when missing. |
+| `AUTO_INSTALL_HOOKS` | `true` | Add the hooks to `<CLAUDE_HOME>/settings.json` at boot when missing. The settings menu overrides it. |
 | `CLAUDE_HOME` | `~/.claude` | Where Claude Code keeps `settings.json` and `projects/`. |
 | `WATCH_TRANSCRIPTS` | `true` | Follow the transcripts in `<CLAUDE_HOME>/projects`. |
-| `TRANSCRIPT_BACKFILL_HOURS` | `6` | At boot, read transcripts written in the last N hours from their start. |
+| `TRANSCRIPT_BACKFILL_HOURS` | `6` | At boot and on refresh, read transcripts written in the last N hours from their start. The settings menu overrides it. |
 | `WATCH_DOCKER` | `true` | Follow `docker events` for the Containers card. |
 | `WATCH_FILES` | `true` | Watch session folders for changes made outside tool calls. |
 | `WATCH_SECURITY` | `true` | Run `npm audit` (calls the npm registry; turn off when offline). |
@@ -148,15 +162,17 @@ In Docker, set `PANEL_PORT`, `PROJECTS_DIR`, `AUTO_INSTALL_HOOKS` and the
 2. **Were the hooks installed?** The boot log says one of
    `HooksInstaller::installed`, `::present` or `::failed`. Confirm with
    `grep -c '127.0.0.1:4317/v1/hooks' ~/.claude/settings.json` (it should print
-   a number above 0). `::failed` means `settings.json` is not valid JSON; the
-   collector never overwrites a file it cannot read, so fix it (or restore
-   `settings.json.bak`) and restart. With `AUTO_INSTALL_HOOKS=false`, run
-   `npm run hooks:install`.
+   a number above 0), or open **configurações** in the panel. `::failed` (or
+   "settings.json ilegível" in the menu) means `settings.json` is not valid
+   JSON; the collector never overwrites a file it cannot read, so fix it (or
+   restore `settings.json.bak`) and restart. With automatic installation off,
+   use **instalar hooks** in the menu or `npm run hooks:install`.
 3. **Is the session newer than the hooks?** Claude Code reads hooks only when a
    session starts. Open a new session, or rely on the transcript watcher: with
    `WATCH_TRANSCRIPTS=true` an already-open session appears as soon as it writes
    its next line, if its transcript changed in the last
-   `TRANSCRIPT_BACKFILL_HOURS`.
+   `TRANSCRIPT_BACKFILL_HOURS`. For an older one, widen the window in
+   **configurações** and press **atualizar**.
 4. **Did anything happen yet?** Claude Code does not send HTTP hooks for
    `SessionStart`, so a session appears on its first prompt or tool call, not
    when the window opens.
@@ -173,8 +189,9 @@ were installed with. Starting on a new port adds hooks for it but leaves the
 old ones. Remove them with
 `npm --prefix api run hooks:uninstall -- --url http://127.0.0.1:<old port>/v1/hooks`.
 
-**Undo everything the collector did to Claude Code.** `npm run hooks:uninstall`
-removes exactly its hooks and keeps the rest of `settings.json`. The file as it
+**Undo everything the collector did to Claude Code.** **remover hooks** in the
+settings menu (which also turns automatic installation off, or the next start
+would put them back) or `npm run hooks:uninstall` removes exactly its hooks and keeps the rest of `settings.json`. The file as it
 was before the first install is in `~/.claude/settings.json.bak`.
 
 **The Containers card stays empty.** The collector needs the Docker CLI and

@@ -13,6 +13,16 @@ How to write an entry is in [CONTRIBUTING.md](CONTRIBUTING.md#changelog).
 
 ### Added
 
+- An **atualizar** button that rescans Claude Code's transcripts for sessions
+  the panel has not shown yet and says how many it found, and a **configurações**
+  side menu: install or remove the hooks on the spot, turn automatic
+  installation on or off, set the recovery window in hours, and see the
+  collector's address, version and watchers. The two settings are saved in
+  `panel-settings.json` beside the database and win over `AUTO_INSTALL_HOOKS` and
+  `TRANSCRIPT_BACKFILL_HOURS`. New loopback-only routes: `GET`/`PATCH
+  /v1/settings`, `PUT`/`DELETE /v1/settings/hooks`, `POST /v1/sessions/refresh`.
+  ([#29](https://github.com/flpms/dashboard-code-ai/pull/29))
+
 - `CHANGELOG.md`, `CONTRIBUTING.md` and a troubleshooting guide for hooks in
   the README. Every pull request now updates the changelog and the docs it
   affects, and CI checks the changelog.

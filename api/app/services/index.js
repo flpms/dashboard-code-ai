@@ -11,7 +11,7 @@ const HOUR_MS = 3_600_000;
 
 // Saved beside the database; an in-memory database keeps settings in memory too.
 const settingsPathFor = (dbPath, dirname, join) =>
-  dbPath === ':memory:' ? null : join(dirname(dbPath), 'settings.json');
+  dbPath === ':memory:' ? null : join(dirname(dbPath), 'panel-settings.json');
 
 /**
  * External systems the collector listens to. Each receives the process-level
