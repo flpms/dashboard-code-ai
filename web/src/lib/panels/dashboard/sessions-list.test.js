@@ -11,7 +11,7 @@ const NOW = Date.parse(SESSION_SUMMARY.lastEventAt) + 1000;
 describe('SessionsList', () => {
   it('explains how to get a first session', () => {
     render(SessionsList, { sessions: [], nowMs: NOW });
-    expect(screen.getByText(/hooks:install/)).toBeInTheDocument();
+    expect(screen.getByText(/aparecem aqui sozinhas/)).toBeInTheDocument();
   });
 
   it('marks a recent session as live and reports the choice', async () => {

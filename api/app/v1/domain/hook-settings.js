@@ -74,3 +74,15 @@ export const withCollectorHooks = (settings, url = DEFAULT_COLLECTOR_URL) => {
 
   return { ...clean, hooks };
 };
+
+/**
+ * Whether every collector hook already points at `url`, so a boot-time install
+ * can leave the file (and its modification time) alone.
+ *
+ * @param {Record<string, any>} settings
+ * @param {string} [url]
+ */
+export const hasCollectorHooks = (settings, url = DEFAULT_COLLECTOR_URL) =>
+  COLLECTOR_HOOKS.every(event =>
+    (settings.hooks?.[event] ?? []).some(group => (group.hooks ?? []).some(isOurs(url)))
+  );

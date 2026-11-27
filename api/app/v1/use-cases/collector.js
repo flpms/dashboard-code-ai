@@ -3,6 +3,7 @@
 import { parseDockerLine } from '../domain/docker-event.js';
 import { normalizeHook } from '../domain/hook-normalizer.js';
 import { isDependencyFile, isInstallCommand, parseNpmAudit } from '../domain/npm-audit.js';
+import { TranscriptTranslator } from '../domain/transcript.js';
 
 /**
  * The collector's rules: turn hooks, container events and file changes into
@@ -36,6 +37,11 @@ export const Collector = dependencies => {
   } = dependencies;
 
   const recentToolWrites = new Map();
+
+  // Sessions that reached us through HTTP hooks in this run. Their transcript
+  // says the same thing later and with less detail, so it is ignored.
+  const hookedSessions = new Set();
+  const transcripts = TranscriptTranslator();
 
   const logFailure = (location, error) => {
     Logger.error(`${location} - ${error.message}`);
@@ -104,41 +110,74 @@ export const Collector = dependencies => {
     },
   });
 
+  // One hook payload, from HTTP or translated from a transcript, into stored
+  // events. `now` is when it happened.
+  const ingest = (data, now) => {
+    const events = normalizeHook(data, now);
+    const [first] = events;
+
+    const isNew = sessionsRepository.touch({
+      id: first.sessionId,
+      cwd: data.cwd,
+      ts: first.ts,
+      count: events.length,
+    });
+
+    // Sessions started before the collector still get a watcher: the first
+    // hook of any kind is enough to know where the session works.
+    // ...and a first security audit, so the instrument has a baseline
+    // before the agent changes anything.
+    if (isNew && data.cwd) {
+      fileWatcher.watch(first.sessionId, data.cwd);
+      securityAuditor.request(first.sessionId, data.cwd);
+    }
+
+    if (data.cwd && events.some(touchesDependencies)) {
+      securityAuditor.request(first.sessionId, data.cwd);
+    }
+
+    const stored = events.map(store);
+    events.forEach(event => SESSION_SIDE_EFFECTS[event.kind]?.(event));
+    return stored;
+  };
+
   const ingestHook = async ({ data, onFinish }) => {
     Logger.verbose(`Collector::ingestHook ${data.hook_event_name}`);
     try {
-      const events = normalizeHook(data, clock());
-      const [first] = events;
-
-      const isNew = sessionsRepository.touch({
-        id: first.sessionId,
-        cwd: data.cwd,
-        ts: first.ts,
-        count: events.length,
-      });
-
-      // Sessions started before the collector still get a watcher: the first
-      // hook of any kind is enough to know where the session works.
-      // ...and a first security audit, so the instrument has a baseline
-      // before the agent changes anything.
-      if (isNew && data.cwd) {
-        fileWatcher.watch(first.sessionId, data.cwd);
-        securityAuditor.request(first.sessionId, data.cwd);
-      }
-
-      if (data.cwd && events.some(touchesDependencies)) {
-        securityAuditor.request(first.sessionId, data.cwd);
-      }
-
-      events.forEach(store);
-      events.forEach(event => SESSION_SIDE_EFFECTS[event.kind]?.(event));
-
+      hookedSessions.add(data.session_id);
+      ingest(data, clock());
       return onFinish.NO_CONTENT();
     } catch (error) {
       logFailure('Collector::ingestHook', error);
       return onFinish.SERVICE_UNAVAILABLE(HTTP_MESSAGES.SERVICE_UNAVAILABLE);
     }
   };
+
+  /**
+   * One line of a Claude Code transcript, for sessions that send no hooks.
+   *
+   * @param {{ entry: Record<string, any>, source: { agentId: string|null, agentType: string|null, launchedBy: string|null } }} line
+   * @returns {object[]} the stored events
+   */
+  const recordTranscriptEntry = ({ entry, source }) => {
+    try {
+      if (source.agentId && source.launchedBy) {
+        transcripts.linkSubagent(source.launchedBy, {
+          agentId: source.agentId,
+          agentType: source.agentType,
+        });
+      }
+      if (hookedSessions.has(entry.sessionId)) return [];
+
+      return transcripts.translate(entry, source).flatMap(({ payload, ts }) => ingest(payload, ts));
+    } catch (error) {
+      logFailure('Collector::recordTranscriptEntry', error);
+      return [];
+    }
+  };
+
+  /** @param {string} sessionId */
+  const isKnownSession = sessionId => sessionsRepository.exists(sessionId);
 
   const listSessions = async ({ data, onFinish }) => {
     Logger.verbose('Collector::listSessions');
@@ -304,6 +343,8 @@ export const Collector = dependencies => {
 
   return {
     ingestHook,
+    isKnownSession,
+    recordTranscriptEntry,
     recordAudit,
     listSessionEvents,
     listSessions,

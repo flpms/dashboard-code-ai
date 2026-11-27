@@ -2,7 +2,8 @@
 
 import 'dotenv/config';
 
-import { resolve } from 'node:path';
+import { homedir } from 'node:os';
+import { join, resolve } from 'node:path';
 
 import packageJson from '../../package.json' with { type: 'json' };
 import { ENV_MANIFEST, coerceEnv } from './env.manifest.js';
@@ -33,8 +34,15 @@ export const config = Object.freeze({
   db: {
     path: raw.DB_PATH,
   },
+  // Claude Code honours CLAUDE_CONFIG_DIR too; read here, like every variable.
+  claude: {
+    home: resolve(raw.CLAUDE_HOME || process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude')),
+    autoInstallHooks: raw.AUTO_INSTALL_HOOKS,
+    backfillMs: raw.TRANSCRIPT_BACKFILL_HOURS * 3_600_000,
+  },
   watchers: {
     docker: raw.WATCH_DOCKER,
+    transcripts: raw.WATCH_TRANSCRIPTS,
     files: raw.WATCH_FILES,
     security: raw.WATCH_SECURITY,
   },

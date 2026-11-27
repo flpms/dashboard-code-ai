@@ -40,6 +40,7 @@ export const SessionsRepository = ({ db, logger }) => {
     },
     end: (id, ts) => statements.end.run(ts, id),
     cwdOf: id => statements.find.get(id)?.cwd ?? null,
+    exists: id => Boolean(statements.find.get(id)),
     list: limit => statements.list.all(limit),
     mostRecentActiveSince: sinceTs => statements.mostRecentSince.get(sinceTs)?.id ?? null,
   };

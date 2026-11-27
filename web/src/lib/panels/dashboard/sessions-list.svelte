@@ -27,8 +27,8 @@
 <nav aria-label="Sessões" class="min-w-0">
   {#if !sessions.length}
     <p class="text-sm font-light text-white/60">
-      Nenhuma sessão ainda. Rode <code class="font-mono text-white">npm run hooks:install</code> na
-      pasta <code class="font-mono text-white">api</code> e abra o Claude Code.
+      Nenhuma sessão ainda. Use o Claude Code nesta máquina: as sessões aparecem aqui sozinhas,
+      inclusive as que já estavam abertas.
     </p>
   {/if}
 

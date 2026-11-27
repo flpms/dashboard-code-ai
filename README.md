@@ -9,6 +9,7 @@ carry.
 
 ```
 Claude Code ── HTTP hooks ──┐
+Claude Code ── transcripts ─┤
 docker events ──────────────┼──► collector (api/, Node + SQLite) ── SSE ──► dashboard (web/, SvelteKit)
 file watcher ───────────────┤
 npm audit ──────────────────┘
@@ -26,33 +27,43 @@ Requires Node 24+.
 ```bash
 npm run install:all
 npm start                       # panel on http://127.0.0.1:4317
-npm run hooks:install           # once: point Claude Code at it
 ```
 
 `npm start` builds the dashboard and starts the collector, which serves it on
-the same address: one process, one port. Open `http://127.0.0.1:4317` and start
-a Claude Code session anywhere on this machine; it shows up live.
+the same address: one process, one port. Open `http://127.0.0.1:4317`; Claude
+Code sessions on this machine show up on their own, including the ones that
+were already open.
+
+The collector listens to Claude Code two ways, with nothing to configure:
+
+- **Hooks.** At boot it adds its HTTP hooks to `~/.claude/settings.json` when
+  they are missing (your settings are kept; the first change saves
+  `settings.json.bak`). Every session started from then on reports each step
+  the moment it happens.
+- **Transcripts.** It follows `~/.claude/projects/**/*.jsonl`, the log Claude
+  Code writes for every session and subagent. That covers sessions opened
+  before the hooks existed (Claude Code reads hooks only at start) and
+  sessions with hooks turned off. Transcripts written in the last 6 hours are
+  read from the start; older ones only from where they are now. A session that
+  sends hooks is never counted twice.
 
 Running natively is the simplest setup: the collector sees your project folders
 and the Docker daemon exactly as Claude Code does.
 
-`hooks:install` adds the collector's HTTP hooks to `~/.claude/settings.json`
-(your existing settings and hooks are kept; the old file is saved as
-`settings.json.bak`). Sessions already open pick the hooks up on their next
-start. To instrument one project only:
+Rather manage the hooks yourself? Set `AUTO_INSTALL_HOOKS=false` and use
+`npm run hooks:install` / `npm run hooks:uninstall` (both keep a
+`settings.json.bak`). To instrument one project only:
 
 ```bash
 npm --prefix api run hooks:install -- --settings /path/to/project/.claude/settings.local.json
 ```
 
-Remove them with `npm run hooks:uninstall` (same flags). Another port? Start
-with `PORT=5000 npm start` and install with `-- --url http://127.0.0.1:5000/v1/hooks`.
+Another port? `PORT=5000 npm start` installs the hooks for that port.
 
 ### Run in Docker
 
 ```bash
 docker compose up -d --build    # panel on http://127.0.0.1:4317
-npm run hooks:install           # on the host, once (needs only Node)
 ```
 
 The collector watches the machine it runs on, so the container is wired to the
@@ -62,6 +73,7 @@ host on purpose:
 | --- | --- | --- |
 | `network_mode: host` | Hooks must arrive from `127.0.0.1`; through a published port they come from the bridge gateway and the loopback guard refuses them. | On Docker Desktop (macOS/Windows), enable *Settings → Resources → Network → Enable host networking*. |
 | Your projects folder, read-only, at the **same path** | Hooks report each session's folder as a host path; the file watcher and `npm audit` open that path. | `PROJECTS_DIR` (default: your home folder). |
+| `~/.claude`, writable, at the same path | The collector adds its hooks to `settings.json` and follows the transcripts in `projects/`. | `AUTO_INSTALL_HOOKS=false` to leave `settings.json` alone. |
 | `/var/run/docker.sock` | The Containers card follows `docker events`. Access to the socket is root-equivalent on the host. | Remove the line and set `WATCH_DOCKER=false` to run without it. |
 | `panel-data` volume | Keeps the event history across restarts. | — |
 
@@ -88,7 +100,7 @@ Claude Code keeps working with the dashboard closed.
 
 | Instrument | Source |
 | --- | --- |
-| Agents and the timeline | `PreToolUse` / `PostToolUse` / `SubagentStart` / `SubagentStop` hooks. Hooks carry `agent_id`, so every call lands on the lane of the agent that made it. |
+| Agents and the timeline | `PreToolUse` / `PostToolUse` / `SubagentStart` / `SubagentStop` hooks, or the same steps read from the session's transcript when it sends no hooks. Both carry the agent id, so every call lands on the lane of the agent that made it. |
 | Containers | `docker events`, attributed to the session (and agent) whose `docker …` or test command ran in the 2 minutes before. |
 | Tests | The summary line of the runner's output (Vitest, Jest, `node --test`, pytest), read from the Bash hook. |
 | Files | `Edit` / `Write` hooks (with author), plus a watcher on the session folder for changes made by scripts and generators. |
