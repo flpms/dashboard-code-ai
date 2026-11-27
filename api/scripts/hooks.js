@@ -26,7 +26,7 @@ import {
   DEFAULT_COLLECTOR_URL,
   withCollectorHooks,
   withoutCollectorHooks,
-} from './hook-settings.js';
+} from '../app/v1/domain/hook-settings.js';
 
 const ACTIONS = Object.freeze({
   install: withCollectorHooks,

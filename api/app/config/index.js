@@ -20,6 +20,7 @@ export const StartupConfig = ({
   dirname,
   enums,
   existsSync,
+  fs,
   join,
   Joi,
   lib,
@@ -45,7 +46,7 @@ export const StartupConfig = ({
 
   const { db } = DBStartup({ env, logger: Logger, DatabaseSync, mkdirSync, dirname });
 
-  const services = Services({ env, existsSync, join, Logger, spawn, watch });
+  const services = Services({ dirname, env, existsSync, fs, join, Logger, spawn, watch });
 
   return {
     // Injected so a test can pin time; every event timestamp comes from here.

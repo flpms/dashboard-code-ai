@@ -60,6 +60,24 @@ export const ENV_MANIFEST = Object.freeze({
     fallback: true,
     doc: 'Run `npm audit` when a session starts and when its dependencies change',
   },
+  WATCH_TRANSCRIPTS: {
+    kind: 'boolean',
+    fallback: true,
+    doc: 'Follow Claude Code transcripts, so sessions without hooks still appear',
+  },
+  TRANSCRIPT_BACKFILL_HOURS: {
+    kind: 'number',
+    fallback: 6,
+    doc: 'At boot, read transcripts written in the last N hours from their start',
+  },
+  AUTO_INSTALL_HOOKS: {
+    kind: 'boolean',
+    fallback: true,
+    doc: 'At boot, add the collector hooks to <CLAUDE_HOME>/settings.json when missing',
+  },
+  CLAUDE_HOME: {
+    doc: 'Claude Code config folder (settings.json, projects/). Unset = ~/.claude',
+  },
   WATCH_FILES: {
     kind: 'boolean',
     fallback: true,

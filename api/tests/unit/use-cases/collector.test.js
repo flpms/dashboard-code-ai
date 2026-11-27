@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
 
 import { buildCollector } from '../../helpers/collector.js';
@@ -258,5 +259,79 @@ describe('Collector security audits', () => {
   it('ignores output that is not an audit report', () => {
     const { collector } = buildCollector();
     assert.equal(collector.recordAudit({ key: 's1', cwd: '/repo', output: 'npm ERR!' }), null);
+  });
+});
+
+describe('Collector::recordTranscriptEntry', () => {
+  const SESSION = '5f1c2e9a-0000-4000-8000-000000000001';
+  const MAIN = { agentId: null, agentType: null, launchedBy: null };
+  const EXPLORE = { agentId: 'abc123', agentType: 'Explore', launchedBy: 'toolu_agent' };
+
+  const fixtureLines = name =>
+    readFileSync(new URL(`../../fixtures/transcript/${name}`, import.meta.url), 'utf8')
+      .trim()
+      .split('\n')
+      .map(line => JSON.parse(line));
+
+  // The order the watcher reads them: the session up to the launch, the
+  // subagent, then the rest of the session.
+  const replay = collector => {
+    const main = fixtureLines('main.jsonl');
+    const launch = main.findIndex(entry => entry.message?.id === 'msg_2') + 1;
+    main
+      .slice(0, launch)
+      .forEach(entry => collector.recordTranscriptEntry({ entry, source: MAIN }));
+    fixtureLines('subagent.jsonl').forEach(entry =>
+      collector.recordTranscriptEntry({ entry, source: EXPLORE })
+    );
+    main.slice(launch).forEach(entry => collector.recordTranscriptEntry({ entry, source: MAIN }));
+  };
+
+  it('builds the same session a hooked run would, timed by the transcript', async () => {
+    const { collector } = buildCollector();
+    replay(collector);
+
+    const events = await eventsOf(collector, SESSION);
+    const kinds = events.map(event => event.kind);
+
+    assert.equal(events[0].kind, 'prompt');
+    assert.equal(events[0].ts, '2026-11-27T10:00:01.000Z');
+    assert.ok(kinds.includes('test.result'));
+    assert.ok(kinds.includes('file.read'));
+    assert.equal(kinds.at(-1), 'turn.end');
+  });
+
+  it('puts the subagent under the call that launched it and ends it with that call', async () => {
+    const { collector } = buildCollector();
+    replay(collector);
+
+    const events = await eventsOf(collector, SESSION);
+    const start = events.find(event => event.kind === 'agent.start');
+    const end = events.find(event => event.kind === 'agent.end');
+
+    assert.equal(start.agentId, 'abc123');
+    assert.equal(start.agentType, 'Explore');
+    assert.equal(start.data.parentSpanId, 'toolu_agent');
+    assert.equal(end.agentId, 'abc123');
+  });
+
+  it('ignores the transcript of a session that sends hooks', async () => {
+    const { collector } = buildCollector();
+    await ingest(collector, hook('UserPromptSubmit', { session_id: SESSION, prompt: 'hi' }));
+
+    replay(collector);
+
+    const events = await eventsOf(collector, SESSION);
+    assert.deepEqual(
+      events.map(event => event.kind),
+      ['prompt']
+    );
+  });
+
+  it('knows which sessions are already stored', async () => {
+    const { collector } = buildCollector();
+    assert.equal(collector.isKnownSession(SESSION), false);
+    replay(collector);
+    assert.equal(collector.isKnownSession(SESSION), true);
   });
 });

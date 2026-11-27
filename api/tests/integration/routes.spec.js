@@ -75,6 +75,7 @@ describe('v1 routes', () => {
         dockerWatcher: { start: () => {}, stop: () => {} },
         fileWatcher: fakeFileWatcher(),
         securityAuditor: fakeSecurityAuditor(),
+        transcriptWatcher: { start: () => {}, stop: async () => {} },
       },
     });
     await app.ready();

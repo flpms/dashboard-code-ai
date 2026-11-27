@@ -4,9 +4,10 @@ import { describe, it } from 'node:test';
 import {
   COLLECTOR_HOOKS,
   DEFAULT_COLLECTOR_URL,
+  hasCollectorHooks,
   withCollectorHooks,
   withoutCollectorHooks,
-} from '../../../scripts/hook-settings.js';
+} from '../../../app/v1/domain/hook-settings.js';
 
 const userSettings = Object.freeze({
   permissions: { allow: ['Bash(npm test)'] },
@@ -47,5 +48,19 @@ describe('hook settings', () => {
     const copy = structuredClone(userSettings);
     withCollectorHooks(copy);
     assert.deepEqual(copy, userSettings);
+  });
+});
+
+describe('hasCollectorHooks', () => {
+  it('is true only when every hook points at the url', () => {
+    const url = 'http://127.0.0.1:4317/v1/hooks';
+    const installed = withCollectorHooks({}, url);
+
+    assert.equal(hasCollectorHooks(installed, url), true);
+    assert.equal(hasCollectorHooks(installed, 'http://127.0.0.1:5000/v1/hooks'), false);
+    assert.equal(hasCollectorHooks({}, url), false);
+
+    const { PreToolUse: _dropped, ...partial } = installed.hooks;
+    assert.equal(hasCollectorHooks({ hooks: partial }, url), false);
   });
 });

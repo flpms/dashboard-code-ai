@@ -67,7 +67,7 @@ test.describe('dashboard', () => {
     await stubCollector(page, { sessions: [] });
     await page.goto('/');
 
-    await expect(page.getByText(/hooks:install/)).toBeVisible();
+    await expect(page.getByText(/aparecem aqui sozinhas/)).toBeVisible();
   });
 
   test('says the collector is unreachable instead of showing a blank page', async ({ page }) => {

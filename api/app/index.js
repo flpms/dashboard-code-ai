@@ -2,6 +2,7 @@
 
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import * as fs from 'node:fs';
 import { existsSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -22,6 +23,7 @@ const start = async () => {
     dirname,
     enums,
     existsSync,
+    fs,
     join,
     Joi,
     lib,
@@ -32,7 +34,7 @@ const start = async () => {
     winston,
   });
 
-  const { db, env, Logger } = dependencies;
+  const { db, env, Logger, services } = dependencies;
 
   const app = await Server(dependencies);
 
@@ -52,6 +54,10 @@ const start = async () => {
 
   Logger.info(`Collector listening on http://${env.app.host}:${env.app.port}/v1`);
   if (env.app.webRoot) Logger.info(`Dashboard on http://${env.app.host}:${env.app.port}/`);
+
+  // Hooks always call loopback: on 0.0.0.0 the collector answers there too.
+  const hookHost = ['0.0.0.0', '::'].includes(env.app.host) ? '127.0.0.1' : env.app.host;
+  services.hooksInstaller.ensure(`http://${hookHost}:${env.app.port}/v1/hooks`);
 
   return app;
 };

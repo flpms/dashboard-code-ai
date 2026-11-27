@@ -64,6 +64,7 @@ describe('dashboard served by the collector', () => {
         dockerWatcher: { start: () => {}, stop: () => {} },
         fileWatcher: fakeFileWatcher(),
         securityAuditor: fakeSecurityAuditor(),
+        transcriptWatcher: { start: () => {}, stop: async () => {} },
       },
     });
     await app.ready();

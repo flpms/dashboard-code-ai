@@ -130,10 +130,18 @@ process.
 
 One module per source, and the only place that spawns a process or touches the
 file system: `docker-watcher` (`docker events`), `file-watcher` (chokidar on
-each session's folder) and `security-auditor` (`npm audit --json`, coalesced
-per folder). Each takes `spawn`, `watch` or `existsSync` as an argument, so the
-tests drive them with fakes, and each has an `enabled` flag from the
-environment.
+each session's folder), `security-auditor` (`npm audit --json`, coalesced
+per folder), `transcript-watcher` (new lines of Claude Code's
+`~/.claude/projects/**/*.jsonl`) and `hooks-installer` (adds the collector's
+hooks to `~/.claude/settings.json` at boot when missing). Each takes `spawn`,
+`watch` or `fs` as an argument, so the tests drive them with fakes, and each
+has an `enabled` flag from the environment.
+
+Transcripts are a second door into the same pipeline: `v1/domain/transcript.js`
+turns each line into the hook payload Claude Code would have sent, and
+`Collector.recordTranscriptEntry` feeds it to the same normalizer with the
+line's own timestamp. A session that has sent an HTTP hook in this run is
+skipped there, so nothing is counted twice.
 
 ---
 
